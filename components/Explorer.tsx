@@ -6,17 +6,20 @@ import { CATEGORIES } from "@/lib/types";
 import { haversineKm } from "@/lib/util";
 import { Icon } from "./Icon";
 import { PlaceRow } from "./ui";
+import { getGeo, locate, useGeo } from "./geo";
+import { DistanceText } from "./Distance";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="grid h-full place-items-center text-sm text-ink-500">Memuat peta…</div> });
 
 type Sort = "rating" | "wifi" | "24jam" | "americano" | "harga" | "jarak";
+const RADII = [1, 3, 5, 10] as const;
 const SORTS: { key: Sort; label: string }[] = [
   { key: "rating", label: "Rating" },
   { key: "wifi", label: "Kecepatan internet" },
   { key: "24jam", label: "Buka 24 jam" },
   { key: "americano", label: "Americano termurah" },
   { key: "harga", label: "Harga termurah" },
-  { key: "jarak", label: "Jarak" },
+  { key: "jarak", label: "Terdekat" },
 ];
 
 export function Explorer({ places, initial }: { places: PlaceView[]; initial: { q: string; cat: string; sort: string; view: "list" | "peta" } }) {
@@ -27,8 +30,9 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
   const [amerMax, setAmerMax] = useState(false); // Americano ≤ Rp20rb
   const [sort, setSort] = useState<Sort>((SORTS.find((s) => s.key === initial.sort)?.key ?? "rating") as Sort);
   const [view, setView] = useState<"list" | "peta">(initial.view);
-  const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
-  const [geoMsg, setGeoMsg] = useState("");
+  const geo = useGeo();
+  const me = geo.loc;
+  const [radius, setRadius] = useState<number | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,19 +48,16 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
     window.history.replaceState(null, "", url.toString());
   }, [q, cats, sort, view]);
 
-  function askLocation(then?: () => void) {
-    if (!navigator.geolocation) return setGeoMsg("Browser tidak mendukung lokasi.");
-    setGeoMsg("Mencari lokasimu…");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setMe({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGeoMsg("");
-        then?.();
-      },
-      () => setGeoMsg("Izin lokasi ditolak — urutan jarak tidak bisa dipakai."),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+  async function askLocation(then?: () => void) {
+    if (await locate()) then?.();
   }
+
+  // Datang dari "Lihat semua terdekat" (?sort=jarak): minta/ambil lokasi sekali saat dibuka.
+  useEffect(() => {
+    const g = getGeo();
+    if (initial.sort === "jarak" && !g.loc && g.status !== "asking") void locate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -85,8 +86,9 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
           return (b.rating ?? 0) - (a.rating ?? 0);
       }
     });
-    return out.map((p) => ({ p, km: dist(p) }));
-  }, [places, q, cats, fastOnly, plugOnly, amerMax, sort, me]);
+    const rows = out.map((p) => ({ p, km: dist(p) }));
+    return me && radius ? rows.filter((x) => x.km <= radius) : rows;
+  }, [places, q, cats, fastOnly, plugOnly, amerMax, sort, me, radius]);
 
   const toggleCat = (k: string) => setCats((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
   const chip = (on: boolean) => `shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition ${on ? "border-espresso-600 bg-espresso-600 text-white" : "border-line bg-white text-ink-900 hover:border-caramel-500"}`;
@@ -138,7 +140,41 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
             </button>
           ))}
         </div>
-        {geoMsg && <p className="text-xs text-amber-500">{geoMsg}</p>}
+        {geo.msg && geo.status !== "asking" && (
+          <p className="text-xs font-medium text-amber-500" role="alert">
+            {geo.msg}
+          </p>
+        )}
+      </div>
+      <div className="space-y-2 rounded-[18px] border border-line bg-white p-3" data-testid="near-panel">
+        <div className="flex items-center gap-2">
+          <span className="grid size-9 shrink-0 place-items-center rounded-[12px] bg-caramel-100 text-espresso-600">
+            <Icon name={geo.status === "asking" ? "loader" : "locate"} size={18} className={geo.status === "asking" ? "animate-spin" : ""} />
+          </span>
+          <div className="min-w-0 flex-1 text-xs">
+            <b className="block text-sm text-ink-900">{me ? "Lokasimu aktif" : "Cari terdekat"}</b>
+            <span className="text-ink-500">{me ? `Akurasi ±${me.acc.toLocaleString("id-ID")} m · tidak disimpan di server` : "Pakai lokasi untuk urutkan dari yang terdekat"}</span>
+          </div>
+          <button
+            onClick={() => askLocation(() => setSort("jarak"))}
+            disabled={geo.status === "asking"}
+            className="shrink-0 rounded-full bg-espresso-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-70"
+          >
+            {geo.status === "asking" ? "Mencari…" : me ? "Perbarui" : "Pakai lokasiku"}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Radius">
+          <span className="mr-1 text-xs font-semibold text-ink-500">Radius</span>
+          {[null, ...RADII].map((r) => (
+            <button
+              key={r ?? "all"}
+              onClick={() => (r && !me ? askLocation(() => { setRadius(r); setSort("jarak"); }) : setRadius(r))}
+              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${radius === r && (me || r === null) ? "border-espresso-600 bg-cream-100 text-espresso-600" : "border-line bg-white text-ink-900"}`}
+            >
+              {r ? `≤ ${r} km` : "Semua"}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -155,10 +191,10 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
 
   const rows = (
     <div className="space-y-3">
-      {list.length === 0 && <p className="rounded-[18px] border border-dashed border-line p-6 text-center text-sm text-ink-500">Tidak ada tempat yang cocok. Coba hapus filter.</p>}
+      {list.length === 0 && <p className="rounded-[18px] border border-dashed border-line p-6 text-center text-sm text-ink-500">{me && radius ? `Tidak ada tempat dalam radius ${radius} km. Coba perbesar radius.` : "Tidak ada tempat yang cocok. Coba hapus filter."}</p>}
       {list.map(({ p, km }) => (
         <div key={p.id} onMouseEnter={() => setSelected(p.id)} className={selected === p.id && view === "peta" ? "rounded-[20px] ring-2 ring-caramel-500" : ""}>
-          <PlaceRow place={p} extra={isFinite(km) ? <span className="shrink-0">• {km < 1 ? `${Math.round(km * 1000)} m` : `${km.toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`}</span> : null} />
+          <PlaceRow place={p} extra={isFinite(km) ? <DistanceText km={km} /> : null} />
         </div>
       ))}
     </div>
@@ -178,8 +214,8 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
           ) : (
             <div className="space-y-4">
               <div className="relative h-[60dvh] min-h-80 overflow-hidden rounded-[18px] border border-line md:h-[560px]">
-                <MapView places={list.map((x) => x.p)} me={me} selected={selected} onSelect={setSelected} />
-                <button onClick={() => askLocation()} className="absolute right-3 bottom-3 z-[500] grid size-11 place-items-center rounded-full bg-white text-espresso-600 shadow-[var(--shadow-card)]" aria-label="Lokasi saya">
+                <MapView places={list.map((x) => x.p)} me={me} radiusKm={me ? radius : null} selected={selected} onSelect={setSelected} />
+                <button onClick={() => askLocation(() => setSort("jarak"))} className="absolute right-3 bottom-3 z-[500] grid size-11 place-items-center rounded-full bg-white text-espresso-600 shadow-[var(--shadow-card)]" aria-label="Lokasi saya">
                   <Icon name="locate" size={20} />
                 </button>
               </div>

@@ -1,11 +1,15 @@
+import type { Metadata } from "next";
+import { SITE_DESC, SITE_NAME, SITE_TAGLINE, pageMeta } from "@/lib/site";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Logo } from "@/components/Nav";
 import { PlaceCard, PlaceRow, SectionHeader } from "@/components/ui";
+import { NearbyHeroButton, NearbySection } from "@/components/Nearby";
 import { listPlaces } from "@/lib/places";
 import { CATEGORIES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { ...pageMeta({ title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: SITE_DESC, path: "/", image: "/og/home.jpg", imageAlt: "Nongki — rekomendasi tempat ngopi lengkap dengan kecepatan WiFi" }), title: { absolute: `${SITE_NAME} — ${SITE_TAGLINE}` } };
 
 export default async function Home() {
   const places = await listPlaces();
@@ -36,6 +40,7 @@ export default async function Home() {
                 <Icon name="search" size={20} />
               </button>
             </form>
+            <NearbyHeroButton />
             <div className="grid max-w-xl grid-cols-5 gap-2">
               {CATEGORIES.map((c) => (
                 <Link key={c.key} href={`/jelajah?cat=${c.key}`} className="flex flex-col items-center gap-1.5 rounded-[14px] p-1 text-center hover:bg-white/5">
@@ -74,6 +79,7 @@ export default async function Home() {
       </section>
 
       <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-6 md:py-10">
+        <NearbySection places={places} />
         <section className="space-y-3">
           <SectionHeader title="Rekomendasi untukmu" href="/jelajah" />
           {places.length === 0 ? (

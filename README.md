@@ -33,9 +33,9 @@ Nongki adalah web app untuk mencari tempat ngopi/nongkrong (fokus Malang) lengka
 ### Untuk pengunjung
 | Halaman | Isi |
 |---|---|
-| **Beranda** (`/`) | Pencarian, kategori (Kopi, WFC, Nongkrong, 24 Jam, Murah), rekomendasi, "WiFi paling kencang", "Buka 24 jam". |
-| **Jelajah** (`/jelajah`) | Cari, filter kategori / WiFi ≥ 30 Mbps / ada colokan / Americano ≤ Rp20rb, urutkan (rating, kecepatan internet, buka 24 jam, **Americano termurah**, harga termurah, jarak), tampilan **List** atau **Peta** (Leaflet + OpenStreetMap, tombol lokasi saya). State filter tersimpan di URL. |
-| **Detail tempat** (`/tempat/[slug]`) | Galeri foto (carousel geser di HP, grid 1+4 di desktop, lightbox dengan swipe & keyboard), status **buka/tutup sekarang**, alamat, jam buka (hari ini disorot), harga, **harga Americano** (+ ukuran & tanggal terakhir dicek) dan harga menu lain, telepon, tombol **Rute** (Google Maps) & **Bagikan** (Web Share API, fallback salin link), fasilitas, ringkasan internet, panel **WiFi details** per tempat, **semua WiFi** (salin SSID, tampil/sembunyi & salin password, **WiFi details per jaringan**), riwayat speed test. |
+| **Beranda** (`/`) | Pencarian, tombol **Cari terdekat dari lokasiku**, bagian **Terdekat dari kamu** (4 tempat terdekat + jarak), kategori (Kopi, WFC, Nongkrong, 24 Jam, Murah), rekomendasi, "WiFi paling kencang", "Buka 24 jam". |
+| **Jelajah** (`/jelajah`) | Cari, filter kategori / WiFi ≥ 30 Mbps / ada colokan / Americano ≤ Rp20rb, urutkan (rating, kecepatan internet, buka 24 jam, **Americano termurah**, harga termurah, **Terdekat**), panel **Cari terdekat** dengan filter **radius ≤ 1/3/5/10 km**, jarak di tiap kartu, tampilan **List** atau **Peta** (Leaflet + OpenStreetMap, titik lokasimu + lingkar akurasi & radius). State filter tersimpan di URL. |
+| **Detail tempat** (`/tempat/[slug]`) | Galeri foto (carousel geser di HP, grid 1+4 di desktop, lightbox dengan swipe & keyboard), status **buka/tutup sekarang**, alamat, jam buka (hari ini disorot), harga, **harga Americano** (+ ukuran & tanggal terakhir dicek) dan harga menu lain, telepon, jarak dari lokasimu, tombol **Rute** (Google Maps) & **Bagikan** (lembar bagikan: **Bagikan ke Story** WA/IG, WhatsApp, Telegram, X, Facebook, salin link, menu bagikan bawaan), fasilitas, ringkasan internet, panel **WiFi details** per tempat, **semua WiFi** (salin SSID, tampil/sembunyi & salin password, **WiFi details per jaringan**), riwayat speed test. |
 | **Cek Speed** (`/cek-speed`) | Tes ping, jitter, packet loss, download, upload dengan gauge; hasil bisa disimpan ke tempat + WiFi yang dipakai. |
 
 Badge kecepatan (rata-rata 5 tes terakhir): **Cepat ≥ 30 Mbps**, **Sedang 10–30 Mbps**, **Lambat < 10 Mbps**.
@@ -59,6 +59,25 @@ _(angka di atas hanya contoh format)_
 | Variabilitas | koefisien variasi (simpangan baku ÷ rata-rata) download: **rendah** < 0,15 ≤ **sedang** < 0,35 ≤ **tinggi**; butuh ≥ 2 tes |
 | Jumlah tes | `N dalam M sesi`; tes yang berjarak ≤ 30 menit dari tes sebelumnya = satu sesi |
 | Tes terakhir | rentang waktu sesi terakhir dalam WIB (Asia/Jakarta) |
+
+### Bagikan, preview link & Story
+
+- **Preview link** (WhatsApp, IG DM, Telegram, X, Facebook, LinkedIn): setiap halaman punya `og:title`, `og:description`, `og:url` absolut, `og:locale=id_ID`, `og:image` **1200×630 JPEG** (± 40–120 KB, `og:image:width/height/type/alt`) + Twitter `summary_large_image`. Gambar dibuat dinamis dengan `next/og` lalu dikompres `sharp`:
+  - `/og/home.jpg`, `/og/jelajah.jpg` — branding + kolase foto tempat.
+  - `/tempat/[slug]/og.jpg` — foto sampul, nama, area, rating, **harga Americano**, **badge kecepatan WiFi**, buka 24 jam. URL diberi `?v=` (hash `updatedAt` + jumlah tes) agar cache WhatsApp/FB ikut berganti saat data berubah.
+- **Gambar Story** `/tempat/[slug]/story.png` — **1080×1920 PNG** berisi foto, nama, rating, status buka, Americano, rentang download, upload/ping, tes terakhir (WIB), dan **QR code** + link pendek. Konten penting di area aman story (tidak tertutup UI IG/WA). Tambahkan `?download=1` untuk mengunduh.
+- **Tombol "Bagikan ke Story"** memakai **Web Share API Level 2** (`navigator.canShare({ files })`) sehingga di HP muncul menu bagikan → pilih **Instagram (Story)** atau **WhatsApp (Status)**. Link ikut disalin untuk ditempel sebagai **stiker Link**. Jika browser tidak bisa membagikan file (mis. desktop), gambar **diunduh** otomatis + link disalin.
+- **Teks share WhatsApp** rapi: nama (tebal), rating & area, harga Americano, WiFi ± Mbps & ping, buka 24 jam, lalu link.
+
+### Cari terdekat (lokasi langsung)
+
+- Memakai **Geolocation API** browser (muncul prompt izin). Jarak dihitung **haversine** di browser, urut dari yang terdekat.
+- **Lokasi tidak pernah dikirim/disimpan di server** — hanya di memori + `sessionStorage` tab itu (maks. 30 menit), bisa dihapus dengan **Lupakan**.
+- Jika izin sudah pernah diberikan, lokasi diambil otomatis tanpa prompt. Pesan jelas untuk izin ditolak, GPS mati, timeout, browser tidak mendukung, atau bukan https.
+
+### Ikon & PWA
+
+- Favicon **SVG** (`app/icon.svg`) + `favicon.ico` (16/32/48), `apple-icon.png` 180×180, ikon PWA 192/512 (biasa & **maskable**) di `public/icons/`, `manifest.webmanifest` (nama, warna tema espresso `#2b1a12`, shortcut _Cari terdekat_ & _Cek speed_). Semua dibuat dari satu sumber: `node scripts/icons.mjs`.
 
 ### Untuk admin (`/admin`)
 - Login dengan password (`ADMIN_PASSWORD`), sesi berupa cookie **httpOnly** bertanda tangan HMAC (7 hari), percobaan login dibatasi 8×/10 menit per IP.
@@ -228,6 +247,9 @@ Satu tes memakai sekitar 50–150 MB kuota (tergantung kecepatan).
 
 | Method & path | Auth | Fungsi |
 |---|---|---|
+| `GET /og/home.jpg`, `/og/jelajah.jpg` | publik | Gambar Open Graph 1200×630 (JPEG). |
+| `GET /tempat/:slug/og.jpg` | publik | Gambar Open Graph tempat 1200×630 (JPEG). |
+| `GET /tempat/:slug/story.png` | publik | Gambar story 1080×1920 (PNG), `?download=1` untuk unduh. |
 | `GET /api/places` | publik | Daftar tempat + rata-rata kecepatan (tanpa detail password WiFi, hanya jumlah). |
 | `GET /api/speed/ping` | publik | Respons kecil untuk ukur ping. |
 | `GET /api/speed/down?bytes=N` | publik | Stream data acak (maks. 25 MB). |
@@ -259,7 +281,9 @@ curl -b jar -X POST https://nongki-malang.vercel.app/api/admin/import \
 app/
   page.tsx                 Beranda
   jelajah/                 List + peta
-  tempat/[slug]/           Detail tempat
+  tempat/[slug]/           Detail tempat (+ og.jpg & story.png route)
+  og/                      Gambar Open Graph beranda & jelajah
+  icon.svg, favicon.ico, apple-icon.png, manifest.ts   Ikon & PWA
   cek-speed/               Tes kecepatan publik
   admin/                   Login, daftar, tambah (import), edit + speedtest
   api/                     Route handlers (lihat tabel API)
@@ -268,7 +292,9 @@ components/
   SpeedTest.tsx            Tes kecepatan (mode publik & admin, sesi multi-tes)
   WifiDetails.tsx          Panel statistik WiFi details
   Explorer.tsx, MapView.tsx  Jelajah + peta Leaflet
-  PlaceClient.tsx          Bagikan, daftar WiFi (salin/tampil password)
+  PlaceClient.tsx          Daftar WiFi (salin/tampil password)
+  ShareSheet.tsx           Lembar bagikan (Story WA/IG, WhatsApp, Telegram, X, FB)
+  geo.ts, Nearby.tsx, Distance.tsx  Lokasi (client-only), Terdekat dari kamu, jarak
   admin/                   LoginForm, ImportFlow, PlaceForm (WiFi & foto editor)
 lib/
   db.ts                    Baca/tulis JSON (Blob / file lokal) + migrasi ringan
@@ -278,6 +304,10 @@ lib/
   util.ts                  Format (Mbps, Rp, tanggal), level kecepatan, status buka, ukuran foto
   wifistats.ts             Statistik WiFi details: rentang, sesi, variabilitas
   types.ts, form.ts        Tipe data & konversi form
+  site.ts                  URL situs, metadata OG/Twitter, teks share
+  og.tsx                   Render gambar OG & story (next/og + sharp + QR)
+assets/fonts/              Plus Jakarta Sans & Fraunces (TTF) untuk gambar OG
+scripts/icons.mjs          Generator favicon/ikon PWA
 ```
 
 ---
@@ -290,6 +320,9 @@ lib/
 - **Penyimpanan satu file JSON** di Blob: dua penulisan yang benar-benar bersamaan dari instance berbeda bisa saling menimpa. Cukup untuk skala kecil; pindah ke Postgres untuk skala besar.
 - **Packet loss adalah estimasi** di level HTTP (request ping yang gagal/timeout), bukan ICMP; browser tidak bisa mengukur loss paket mentah.
 - **Harga menu diisi manual** oleh admin (Google Maps tidak menyediakan harga per menu); tanggal _terakhir dicek_ membantu menilai kebaruannya.
+- **Preview link di-cache** oleh WhatsApp/Facebook/Telegram; perubahan data baru terlihat saat link dibagikan ulang (URL gambar ber-versi membantu, tapi cache halaman bisa bertahan beberapa hari). Debug: [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/).
+- **Bagikan ke Story** bergantung pada dukungan Web Share file di browser HP (Chrome Android & Safari iOS 15+); Instagram/WhatsApp harus terpasang. Di desktop gambar diunduh.
+- **Lokasi** butuh izin & https; akurasi tergantung perangkat (Wi-Fi/GPS). Tempat tanpa koordinat tidak ikut dihitung jaraknya.
 - **Hasil tes pengunjung tidak diverifikasi** (hanya dibatasi per IP). Admin dapat menghapus hasil yang janggal; hasil admin diberi label.
 - Akurasi tes bergantung pada browser & perangkat; fallback server Nongki (Vercel) kurang akurat dibanding Cloudflare.
 - Tile peta OpenStreetMap tunduk pada kebijakan fair-use OSM.

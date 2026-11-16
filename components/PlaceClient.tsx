@@ -6,7 +6,7 @@ import { fmtMbps } from "@/lib/util";
 import type { WifiStats } from "@/lib/wifistats";
 import { WifiDetails } from "./WifiDetails";
 
-async function copyText(t: string) {
+export async function copyText(t: string) {
   try {
     await navigator.clipboard.writeText(t);
     return true;
@@ -23,7 +23,7 @@ async function copyText(t: string) {
   }
 }
 
-function useToast() {
+export function useToast() {
   const [msg, setMsg] = useState("");
   const show = (m: string) => {
     setMsg(m);

@@ -2,17 +2,32 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { SiteHeader, BottomNav } from "@/components/Nav";
+import { SITE_DESC, SITE_NAME, SITE_TAGLINE, SITE_URL, pageMeta } from "@/lib/site";
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", display: "swap" });
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", weight: ["600", "700"], display: "swap" });
 
+const home = pageMeta({ title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: SITE_DESC, path: "/", image: "/og/home.jpg", imageAlt: "Nongki — rekomendasi tempat ngopi lengkap dengan kecepatan WiFi" });
+
 export const metadata: Metadata = {
-  title: { default: "Nongki — Tempat ngopi & nongkrong + cek WiFi", template: "%s · Nongki" },
-  description: "Rekomendasi tempat ngopi & nongkrong lengkap dengan kecepatan internet, daftar WiFi, dan password-nya.",
-  applicationName: "Nongki",
+  ...home,
+  metadataBase: new URL(SITE_URL),
+  title: { default: `${SITE_NAME} — ${SITE_TAGLINE}`, template: "%s · Nongki" },
+  applicationName: SITE_NAME,
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
+  category: "food",
 };
 
-export const viewport: Viewport = { themeColor: "#2b1a12", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#2b1a12" },
+    { media: "(prefers-color-scheme: dark)", color: "#2b1a12" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

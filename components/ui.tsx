@@ -3,6 +3,7 @@ import type { PlaceView, SpeedLevel } from "@/lib/types";
 import { PRICE_LABEL } from "@/lib/types";
 import { fmtMbps, fmtRp, photoSize } from "@/lib/util";
 import { Icon } from "./Icon";
+import { AutoDistance } from "./Distance";
 
 const GRADS = [
   ["#8A5A3B", "#2B1A12"],
@@ -84,6 +85,7 @@ export function PlaceCard({ place }: { place: PlaceView }) {
       <Photo place={place} className="h-36">
         <div className="absolute inset-x-2.5 top-2.5 flex items-start justify-between">
           <WifiBadge level={place.level} mbps={place.avgDown} />
+          <AutoDistance lat={place.lat} lng={place.lng} badge />
         </div>
       </Photo>
       <div className="space-y-1.5 p-3">
@@ -127,7 +129,7 @@ export function PlaceRow({ place, extra }: { place: PlaceView; extra?: React.Rea
         <p className="flex items-center gap-1 truncate text-xs text-ink-500">
           <Icon name="pin" size={13} className="shrink-0" />
           <span className="truncate">{place.area || place.address}</span>
-          {extra}
+          {extra === undefined ? <AutoDistance lat={place.lat} lng={place.lng} /> : extra}
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
           <WifiBadge level={place.level} mbps={place.avgDown} />

@@ -3,7 +3,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import Link from "next/link";
 import { useEffect } from "react";
-import { MapContainer, Marker, Popup, TileLayer, CircleMarker, useMap } from "react-leaflet";
+import { Circle, MapContainer, Marker, Popup, TileLayer, CircleMarker, useMap } from "react-leaflet";
 import type { PlaceView } from "@/lib/types";
 
 function pinIcon(p: PlaceView, on: boolean) {
@@ -22,7 +22,9 @@ function pinIcon(p: PlaceView, on: boolean) {
   });
 }
 
-function Fit({ places, me }: { places: PlaceView[]; me: { lat: number; lng: number } | null }) {
+type Me = { lat: number; lng: number; acc?: number } | null;
+
+function Fit({ places, me }: { places: PlaceView[]; me: Me }) {
   const map = useMap();
   useEffect(() => {
     const pts: [number, number][] = places.filter((p) => p.lat != null && p.lng != null).map((p) => [p.lat!, p.lng!]);
@@ -33,13 +35,19 @@ function Fit({ places, me }: { places: PlaceView[]; me: { lat: number; lng: numb
   return null;
 }
 
-export default function MapView({ places, me, selected, onSelect }: { places: PlaceView[]; me: { lat: number; lng: number } | null; selected: string | null; onSelect: (id: string) => void }) {
+export default function MapView({ places, me, radiusKm = null, selected, onSelect }: { places: PlaceView[]; me: Me; radiusKm?: number | null; selected: string | null; onSelect: (id: string) => void }) {
   const withLL = places.filter((p) => p.lat != null && p.lng != null);
   return (
     <MapContainer center={[-7.9666, 112.6326]} zoom={13} scrollWheelZoom className="size-full">
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
       <Fit places={withLL} me={me} />
-      {me && <CircleMarker center={[me.lat, me.lng]} radius={9} pathOptions={{ color: "#fff", weight: 3, fillColor: "#c8864b", fillOpacity: 1 }} />}
+      {me && radiusKm && <Circle center={[me.lat, me.lng]} radius={radiusKm * 1000} pathOptions={{ color: "#6b3f26", weight: 1.5, dashArray: "6 6", fillColor: "#c8864b", fillOpacity: 0.06 }} />}
+      {me && !!me.acc && me.acc < 3000 && <Circle center={[me.lat, me.lng]} radius={me.acc} pathOptions={{ stroke: false, fillColor: "#c8864b", fillOpacity: 0.15 }} />}
+      {me && (
+        <CircleMarker center={[me.lat, me.lng]} radius={9} pathOptions={{ color: "#fff", weight: 3, fillColor: "#c8864b", fillOpacity: 1 }}>
+          <Popup>Lokasimu</Popup>
+        </CircleMarker>
+      )}
       {withLL.map((p) => (
         <Marker key={p.id} position={[p.lat!, p.lng!]} icon={pinIcon(p, selected === p.id)} eventHandlers={{ click: () => onSelect(p.id) }}>
           <Popup>
