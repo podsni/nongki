@@ -105,7 +105,7 @@ const levelColor = (mbps: number | null) => (mbps == null ? C.ink500 : mbps >= 3
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 
 async function encode(img: ImageResponse, fmt: "jpeg" | "png") {
-  // Isi gambar bergantung pada domain (Host) → cache CDN per host.
+  // Isi gambar bergantung pada domain → URL gambar membawa ?h=<domain> agar cache CDN terpisah per domain.
   const raw = Buffer.from(await img.arrayBuffer());
   const out = fmt === "jpeg" ? await sharp(raw).jpeg({ quality: 82, mozjpeg: true }).toBuffer() : await sharp(raw).png({ palette: true, quality: 90, effort: 8, compressionLevel: 9 }).toBuffer();
   return new Response(new Uint8Array(out), {
@@ -113,7 +113,6 @@ async function encode(img: ImageResponse, fmt: "jpeg" | "png") {
       "content-type": fmt === "jpeg" ? "image/jpeg" : "image/png",
       "content-length": String(out.length),
       "cache-control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
-      vary: "Host",
     },
   });
 }

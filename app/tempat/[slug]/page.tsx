@@ -12,7 +12,7 @@ import { FACILITIES } from "@/lib/types";
 import { fmtDate, fmtMbps, fmtRp, levelOf, mapsRouteUrl, openStatus, timeAgo } from "@/lib/util";
 import { computeStats } from "@/lib/wifistats";
 import { WifiDetails } from "@/components/WifiDetails";
-import { requestBase } from "@/lib/host";
+import { imgQuery, requestBase } from "@/lib/host";
 import { imageVersion, pageMeta, placeDescription, placeShareText } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -23,12 +23,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const r = await getPlace((await params).slug);
   if (!r) return { title: "Tempat tidak ditemukan", robots: { index: false } };
   const p = r.place;
+  const base = await requestBase();
   return pageMeta({
-    base: await requestBase(),
+    base,
     title: p.area ? `${p.name} · ${p.area}` : p.name,
     description: placeDescription(p),
     path: `/tempat/${p.slug}`,
-    image: `/tempat/${p.slug}/og.jpg?v=${imageVersion(p)}`,
+    image: `/tempat/${p.slug}/og.jpg?${imgQuery(imageVersion(p), base)}`,
     imageAlt: `${p.name} — foto, rating, harga & kecepatan WiFi`,
   });
 }
@@ -42,7 +43,8 @@ export default async function Detail({ params }: Props) {
   const facs = FACILITIES.filter((f) => p.facilities.includes(f.key));
   const wifiName = (id: string | null) => p.wifi.find((w) => w.id === id)?.ssid;
   const status = openStatus(p);
-  const pageUrl = `${await requestBase()}/tempat/${p.slug}`;
+  const base = await requestBase();
+  const pageUrl = `${base}/tempat/${p.slug}`;
   const placeStats = computeStats(speeds);
   const wifiStats = Object.fromEntries(p.wifi.map((w) => [w.id, computeStats(speeds.filter((s) => s.wifiId === w.id))]));
   const otherMenu = p.menu.filter((m) => m.id !== p.americano?.id);
@@ -144,7 +146,7 @@ export default async function Detail({ params }: Props) {
               <a href={mapsRouteUrl(p)} target="_blank" rel="noopener noreferrer" className="flex h-12 items-center justify-center gap-2 rounded-[14px] bg-espresso-600 font-semibold text-white hover:bg-espresso-700">
                 <Icon name="nav" size={18} /> Rute
               </a>
-              <ShareSheet url={pageUrl} title={p.name} text={placeShareText(p, pageUrl)} storyUrl={`/tempat/${p.slug}/story.png?v=${imageVersion(p)}`} slug={p.slug} className="flex h-12 items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-espresso-600 bg-white font-semibold text-espresso-600" />
+              <ShareSheet url={pageUrl} title={p.name} text={placeShareText(p, pageUrl)} storyUrl={`/tempat/${p.slug}/story.png?${imgQuery(imageVersion(p), base)}`} slug={p.slug} className="flex h-12 items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-espresso-600 bg-white font-semibold text-espresso-600" />
             </div>
             {info}
             {facs.length > 0 && (
