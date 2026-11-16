@@ -146,7 +146,7 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
   async function measureUp(s: Server, seconds = 7) {
     const chunk = new Uint8Array(s.key === "cf" ? 4_000_000 : 2_000_000);
     for (let i = 0; i < chunk.length; i += 65536) crypto.getRandomValues(chunk.subarray(i, Math.min(i + 65536, chunk.length)));
-    const blob = new Blob([chunk]);
+    const blob = new Blob([chunk], { type: "application/octet-stream" });
     let bytes = 0;
     const start = performance.now();
     const stop = start + seconds * 1000;
