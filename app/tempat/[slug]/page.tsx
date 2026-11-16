@@ -129,9 +129,13 @@ export default async function Detail({ params }: Props) {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs text-ink-500">{speeds.length ? `Rata-rata ${Math.min(speeds.length, 5)} tes terakhir` : "Belum ada tes kecepatan"}</p>
-                  <p className="text-4xl font-extrabold tracking-tight">
-                    {fmtMbps(p.avgDown)} <span className="text-sm font-semibold text-ink-500">Mbps</span>
-                  </p>
+                  {p.avgDown != null ? (
+                    <p className="text-4xl font-extrabold tracking-tight">
+                      {fmtMbps(p.avgDown)} <span className="text-sm font-semibold text-ink-500">Mbps</span>
+                    </p>
+                  ) : (
+                    <p className="pt-1 text-lg font-bold text-ink-500">Belum diukur</p>
+                  )}
                 </div>
                 <WifiBadge level={p.level} mbps={p.avgDown} label={p.level ?? "Belum dites"} />
               </div>
