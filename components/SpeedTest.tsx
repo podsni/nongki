@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fmtMbps, levelOf } from "@/lib/util";
 import { Icon } from "./Icon";
 
-type PlaceOpt = { id: string; slug: string; name: string; area: string; isExample: boolean; wifi: { id: string; ssid: string }[] };
+type PlaceOpt = { id: string; slug: string; name: string; area: string; wifi: { id: string; ssid: string }[] };
 type Phase = "idle" | "ping" | "download" | "upload" | "done" | "error";
 type Server = { key: "cf" | "nongki"; label: string; ping: () => string; down: (b: number) => string; up: string };
 
@@ -67,7 +68,13 @@ function Gauge({ value, label, sub, dark }: { value: number | null; label: strin
   );
 }
 
-export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initialSlug: string }) {
+/**
+ * Tes kecepatan di browser. `admin` = mode tertanam di halaman admin:
+ * tempat dikunci, hasil disimpan lewat /api/admin/speeds dan ditandai "diukur admin".
+ */
+export function SpeedTest({ places, initialSlug, admin = false }: { places: PlaceOpt[]; initialSlug: string; admin?: boolean }) {
+  const router = useRouter();
+  const saveRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [server, setServer] = useState<Server>(SERVERS[0]);
   const [ping, setPing] = useState<number | null>(null);
@@ -238,14 +245,20 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
   async function save() {
     if (!placeId || down == null || up == null || ping == null) return;
     setSaved("saving");
-    const res = await fetch("/api/speed/results", {
+    const res = await fetch(admin ? "/api/admin/speeds" : "/api/speed/results", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ placeId, wifiId: wifiId || null, down, up, ping, jitter, server: server.key === "cf" ? "Cloudflare" : "Nongki" }),
     });
-    const j = await res.json();
+    const j = await res.json().catch(() => ({ ok: false, error: "Respons server tidak valid" }));
     setSaved(j.ok ? "ok" : j.error || "Gagal menyimpan");
+    if (j.ok) router.refresh();
   }
+
+  // Setelah selesai di HP, arahkan ke kartu simpan.
+  useEffect(() => {
+    if (phase === "done" && window.innerWidth < 768) saveRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [phase]);
 
   const running = phase === "ping" || phase === "download" || phase === "upload";
   const lv = levelOf(down);
@@ -281,12 +294,14 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-0 md:px-6 md:py-8">
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="space-y-4 bg-espresso-900 px-4 pt-5 pb-6 text-white md:rounded-[26px] md:p-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-extrabold">Cek Kecepatan</h1>
-            <span className="text-xs text-cream-200">{server.label}</span>
+    <Wrap admin={admin}>
+      <div className={`grid gap-6 [&>*]:min-w-0 ${admin ? "lg:grid-cols-2" : "md:grid-cols-2"}`}>
+        <section className={`space-y-4 bg-espresso-900 text-white ${admin ? "rounded-[22px] p-4 md:p-6" : "px-4 pt-5 pb-6 md:rounded-[26px] md:p-6"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            {admin ? <h2 className="text-xl font-extrabold">Tes kecepatan di lokasi</h2> : <h1 className="text-2xl font-extrabold">Cek Kecepatan</h1>}
+            <span className="inline-flex items-center gap-1 text-xs text-cream-200">
+              <Icon name="pin" size={12} /> {server.label}
+            </span>
           </div>
           <Gauge value={gaugeVal} label={gaugeLabel} sub={sub} dark />
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -311,7 +326,7 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
           <p className="text-center text-xs text-cream-200/70">Tes memakai ±50–150 MB kuota. Dekati router agar hasil akurat.</p>
         </section>
 
-        <section className="space-y-4 px-4 pb-6 md:px-0">
+        <section className={`space-y-4 ${admin ? "" : "px-4 pb-6 md:px-0"}`}>
           {phase === "done" && down != null ? (
             <div className="space-y-4 rounded-[18px] border border-line bg-white p-4">
               <div className={`flex items-center gap-2 rounded-[14px] px-4 py-3 font-semibold text-white ${lv === "Cepat" ? "bg-mint-600" : lv === "Sedang" ? "bg-amber-500" : "bg-slow-600"}`}>
@@ -338,8 +353,13 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
             </div>
           )}
 
-          <div className="space-y-3 rounded-[18px] border border-line bg-white p-4">
-            <h2 className="font-bold">Simpan hasil ke tempat</h2>
+          <div ref={saveRef} className="space-y-3 rounded-[18px] border border-line bg-white p-4">
+            <h2 className="font-bold">{admin ? "Simpan hasil ke tempat ini" : "Simpan hasil ke tempat"}</h2>
+            {admin && place ? (
+              <p className="text-sm text-ink-500">
+                Hasil akan tercatat di <b className="text-ink-900">{place.name}</b> dengan label &quot;Diukur admin di lokasi&quot;. Pastikan kamu sedang terhubung ke WiFi tempat ini.
+              </p>
+            ) : (
             <label className="block space-y-1.5">
               <span className="text-xs font-semibold">Tempat</span>
               <select value={placeId} onChange={(e) => { setPlaceId(e.target.value); setWifiId(""); setSaved(""); }} className="h-12 w-full rounded-[14px] border border-line bg-white px-3 text-sm">
@@ -352,9 +372,10 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
                 ))}
               </select>
             </label>
+            )}
             {place && place.wifi.length > 0 && (
               <label className="block space-y-1.5">
-                <span className="text-xs font-semibold">Terhubung ke WiFi (opsional)</span>
+                <span className="text-xs font-semibold">Diukur di WiFi mana? (opsional)</span>
                 <select value={wifiId} onChange={(e) => setWifiId(e.target.value)} className="h-12 w-full rounded-[14px] border border-line bg-white px-3 text-sm">
                   <option value="">Tidak tahu / data seluler</option>
                   {place.wifi.map((w) => (
@@ -366,10 +387,12 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
               </label>
             )}
             <button onClick={save} disabled={phase !== "done" || !placeId || saved === "saving" || saved === "ok"} className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-espresso-600 font-semibold text-white disabled:opacity-40">
-              <Icon name="save" size={18} /> {saved === "saving" ? "Menyimpan…" : saved === "ok" ? "Tersimpan" : "Simpan hasil ke tempat ini"}
+              <Icon name={saved === "ok" ? "check" : "save"} size={18} /> {saved === "saving" ? "Menyimpan…" : saved === "ok" ? "Tersimpan" : "Simpan hasil ke tempat ini"}
             </button>
             {phase !== "done" && <p className="text-xs text-ink-500">Selesaikan tes dulu untuk menyimpan hasil.</p>}
-            {saved === "ok" && place && (
+            {phase === "done" && !placeId && <p className="text-xs font-semibold text-amber-500">Pilih tempat tempat kamu sedang berada.</p>}
+            {saved === "ok" && admin && <p className="text-sm font-semibold text-mint-600">Hasil disimpan dan muncul di riwayat di bawah.</p>}
+            {saved === "ok" && place && !admin && (
               <p className="text-sm text-mint-600">
                 Hasil disimpan.{" "}
                 <Link href={`/tempat/${place.slug}`} className="font-semibold underline">
@@ -381,6 +404,10 @@ export function SpeedTest({ places, initialSlug }: { places: PlaceOpt[]; initial
           </div>
         </section>
       </div>
-    </main>
+    </Wrap>
   );
+}
+
+function Wrap({ admin, children }: { admin: boolean; children: React.ReactNode }) {
+  return admin ? <div>{children}</div> : <main className="mx-auto max-w-6xl px-0 md:px-6 md:py-8">{children}</main>;
 }

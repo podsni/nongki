@@ -25,10 +25,10 @@ export type Place = {
   facilities: string[];
   phone: string;
   website: string;
-  photoUrl: string;
+  photoUrl: string; // foto sampul (= photos[0])
+  photos: string[]; // galeri dari Google Maps / tambahan admin
   mapsUrl: string;
   description: string;
-  isExample: boolean;
   wifi: Wifi[];
   createdAt: string;
   updatedAt: string;
@@ -43,6 +43,7 @@ export type SpeedResult = {
   ping: number;
   jitter: number;
   server: string;
+  by: "admin" | "pengunjung";
   createdAt: string;
 };
 

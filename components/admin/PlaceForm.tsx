@@ -2,62 +2,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CATEGORIES, FACILITIES, PRICE_LABEL } from "@/lib/types";
-import type { HoursRow, Wifi } from "@/lib/types";
+import type { Wifi } from "@/lib/types";
+import { DAYS, type FormValues } from "@/lib/form";
+export { toForm, type FormValues } from "@/lib/form";
+import { photoSize } from "@/lib/util";
 import { Icon } from "../Icon";
-
-export type FormValues = {
-  name: string;
-  address: string;
-  area: string;
-  lat: string;
-  lng: string;
-  rating: string;
-  reviews: string;
-  priceLevel: string;
-  priceText: string;
-  hours: HoursRow[];
-  is24h: boolean;
-  categories: string[];
-  facilities: string[];
-  phone: string;
-  website: string;
-  photoUrl: string;
-  mapsUrl: string;
-  description: string;
-  isExample: boolean;
-  wifi: Wifi[];
-};
-
-export const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
-
-type Src = Partial<{ [K in keyof FormValues]: unknown }> & Record<string, unknown>;
-const s = (v: unknown) => (v == null ? "" : String(v));
-
-export function toForm(src: Src): FormValues {
-  const hoursIn = Array.isArray(src.hours) ? (src.hours as HoursRow[]) : [];
-  return {
-    name: s(src.name),
-    address: s(src.address),
-    area: s(src.area),
-    lat: s(src.lat),
-    lng: s(src.lng),
-    rating: s(src.rating),
-    reviews: s(src.reviews),
-    priceLevel: s(src.priceLevel),
-    priceText: s(src.priceText),
-    hours: DAYS.map((d) => ({ day: d, text: hoursIn.find((h) => h.day.toLowerCase() === d.toLowerCase())?.text ?? "" })),
-    is24h: !!src.is24h,
-    categories: Array.isArray(src.categories) ? (src.categories as string[]) : [],
-    facilities: Array.isArray(src.facilities) ? (src.facilities as string[]) : ["wifi"],
-    phone: s(src.phone),
-    website: s(src.website),
-    photoUrl: s(src.photoUrl),
-    mapsUrl: s(src.mapsUrl),
-    description: s(src.description),
-    isExample: !!src.isExample,
-    wifi: Array.isArray(src.wifi) ? (src.wifi as Wifi[]).map((w) => ({ ...w })) : [],
-  };
-}
 
 const newId = () => "w" + Math.random().toString(36).slice(2, 10);
 const inputCls = "h-11 w-full rounded-[12px] border border-line bg-white px-3 text-sm outline-none focus:border-espresso-600";
@@ -120,6 +69,84 @@ function WifiEditor({ wifi, onChange }: { wifi: Wifi[]; onChange: (w: Wifi[]) =>
       <button type="button" onClick={() => onChange([...wifi, { id: newId(), ssid: "", password: "", note: "" }])} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-espresso-400 text-sm font-semibold text-espresso-600 hover:bg-cream-100">
         <Icon name="plus" size={16} /> Tambah WiFi
       </button>
+    </div>
+  );
+}
+
+function PhotoEditor({ photos, mapsUrl, onChange }: { photos: string[]; mapsUrl: string; onChange: (p: string[]) => void }) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  async function refetch() {
+    if (!mapsUrl) return setMsg("Isi dulu Link Google Maps di atas.");
+    setBusy(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: mapsUrl }) });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || "Gagal");
+      const fresh: string[] = j.draft.photos || [];
+      const key = (u: string) => u.replace(/=[^/]*$/, "");
+      const freshKeys = new Set(fresh.map(key));
+      const manual = photos.filter((p) => !/googleusercontent\.com\//.test(p) && !freshKeys.has(key(p)));
+      onChange([...fresh, ...manual]);
+      setMsg(fresh.length ? `${fresh.length} foto diambil dari Google Maps. Klik Simpan untuk menyimpan.` : "Tidak ada foto yang bisa diambil dari Maps.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const move = (i: number, to: number) => {
+    const a = [...photos];
+    const [x] = a.splice(i, 1);
+    a.splice(to, 0, x);
+    onChange(a);
+  };
+  return (
+    <div className="space-y-3">
+      {photos.length === 0 ? (
+        <p className="rounded-[12px] bg-cream-100 px-3 py-3 text-sm text-ink-500">Belum ada foto. Ambil dari Google Maps atau tempel URL foto.</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">
+          {photos.map((p, i) => (
+            <div key={p} className="group relative aspect-square overflow-hidden rounded-[12px] bg-cream-200" data-testid="photo-item">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photoSize(p, 240, 240)} alt={`Foto ${i + 1}`} loading="lazy" referrerPolicy="no-referrer" className="size-full object-cover" />
+              {i === 0 && <span className="absolute top-1.5 left-1.5 rounded-full bg-espresso-900/85 px-2 py-0.5 text-[10px] font-bold text-white">Sampul</span>}
+              <div className="absolute inset-x-1 bottom-1 flex justify-between gap-1">
+                {i > 0 ? (
+                  <button type="button" onClick={() => move(i, 0)} className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-espresso-900" aria-label="Jadikan sampul">
+                    Sampul
+                  </button>
+                ) : <span />}
+                <button type="button" onClick={() => onChange(photos.filter((_, j) => j !== i))} className="grid size-6 place-items-center rounded-full bg-white/90 text-slow-600" aria-label={`Hapus foto ${i + 1}`}>
+                  <Icon name="x" size={13} strokeWidth={3} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input className={inputCls} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Tempel URL foto (https://…)" />
+        <button
+          type="button"
+          onClick={() => {
+            if (!/^https:\/\//.test(url.trim())) return setMsg("URL foto harus diawali https://");
+            onChange([...photos, url.trim()]);
+            setUrl("");
+            setMsg("");
+          }}
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-[12px] border border-line px-4 text-sm font-semibold"
+        >
+          <Icon name="plus" size={16} /> Tambah
+        </button>
+        <button type="button" onClick={refetch} disabled={busy} className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-cream-100 px-4 text-sm font-semibold text-espresso-600 disabled:opacity-50">
+          <Icon name={busy ? "loader" : "refresh"} size={16} className={busy ? "animate-spin" : ""} /> {busy ? "Mengambil…" : "Ambil ulang dari Maps"}
+        </button>
+      </div>
+      {msg && <p className="text-xs font-semibold text-espresso-600">{msg}</p>}
     </div>
   );
 }
@@ -198,19 +225,14 @@ export function PlaceForm({ initial, placeId, extracted }: { initial: FormValues
           <Field label="Link Google Maps">
             <input className={inputCls} value={v.mapsUrl} onChange={(e) => set("mapsUrl", e.target.value)} />
           </Field>
-          <Field label="Foto (URL https)" className="md:col-span-2">
-            <div className="flex gap-3">
-              <input className={inputCls} value={v.photoUrl} onChange={(e) => set("photoUrl", e.target.value)} placeholder="https://…" />
-              {v.photoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={v.photoUrl} alt="" referrerPolicy="no-referrer" className="h-11 w-16 shrink-0 rounded-[10px] object-cover" />
-              )}
-            </div>
-          </Field>
           <Field label="Deskripsi singkat" className="md:col-span-2">
             <textarea className={`${inputCls} h-20 py-2`} value={v.description} onChange={(e) => set("description", e.target.value)} />
           </Field>
         </div>
+      </Card>
+
+      <Card title="Foto & galeri" right={<span className="text-xs text-ink-500">{v.photos.length} foto</span>}>
+        <PhotoEditor photos={v.photos} mapsUrl={v.mapsUrl} onChange={(ph) => set("photos", ph)} />
       </Card>
 
       <Card title="WiFi di tempat ini" right={<span className="text-xs text-ink-500">{v.wifi.length} jaringan</span>}>
@@ -266,11 +288,6 @@ export function PlaceForm({ initial, placeId, extracted }: { initial: FormValues
         )}
       </Card>
 
-      {v.isExample && (
-        <label className="flex items-center gap-2 rounded-[14px] bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-500">
-          <input type="checkbox" checked={v.isExample} onChange={(e) => set("isExample", e.target.checked)} className="size-4" /> Tandai sebagai data contoh
-        </label>
-      )}
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">

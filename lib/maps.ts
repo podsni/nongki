@@ -18,6 +18,7 @@ export type ImportDraft = {
   phone: string;
   website: string;
   photoUrl: string;
+  photos: string[];
   mapsUrl: string;
   resolvedUrl: string;
   extracted: string[]; // field yang berhasil diambil
@@ -143,6 +144,51 @@ function priceFromText(t: string): number | null {
   return 4;
 }
 
+const PHOTO_RE = /^https:\/\/lh\d\.googleusercontent\.com\/(?:gpms-cs-s|grass-cs|geougc-cs|p)\/[A-Za-z0-9_-]+/;
+
+/** Ambil semua foto tempat dari data Maps (sampul, galeri kategori, foto ulasan), lalu buang duplikat. */
+async function collectPhotos(p: unknown[]): Promise<string[]> {
+  const bases: string[] = [];
+  const walk = (x: unknown) => {
+    if (Array.isArray(x)) x.forEach(walk);
+    else if (typeof x === "string") {
+      const m = x.match(PHOTO_RE);
+      if (m && !bases.includes(m[0])) bases.push(m[0]);
+    }
+  };
+  // 72 = sampul, 51 = galeri per kategori, 37 = foto utama lain, 175 = ulasan (berisi foto pengunjung).
+  // Hanya subtree ini yang dibaca supaya foto tempat lain ("orang juga mencari") tidak ikut.
+  for (const i of [72, 51, 37, 175]) walk(at(p, i));
+  const cand = bases.slice(0, 70);
+  // Google sering menyimpan foto yang sama dengan ID berbeda; samakan lewat hash thumbnail kecil.
+  const { createHash } = await import("crypto");
+  const hashes: (string | null)[] = new Array(cand.length).fill(null);
+  const queue = cand.map((b, i) => [b, i] as const);
+  await Promise.all(
+    Array.from({ length: 12 }, async () => {
+      for (let job = queue.shift(); job; job = queue.shift()) {
+        const [b, i] = job;
+        try {
+          const r = await fetch(`${b}=w24-h24-k-no`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(5000) });
+          if (!r.ok || !(r.headers.get("content-type") || "").startsWith("image/")) continue;
+          hashes[i] = createHash("sha1").update(Buffer.from(await r.arrayBuffer())).digest("hex");
+        } catch {
+          /* lewati foto yang gagal dimuat */
+        }
+      }
+    }),
+  );
+  const seen = new Set<string>();
+  const out: string[] = [];
+  cand.forEach((b, i) => {
+    const h = hashes[i];
+    if (!h || seen.has(h)) return;
+    seen.add(h);
+    out.push(`${b}=w1600-h1200-k-no`);
+  });
+  return out.slice(0, 48);
+}
+
 export async function importFromGoogleMaps(rawUrl: string): Promise<ImportDraft> {
   const url = rawUrl.trim();
   if (!isGoogleMapsUrl(url)) throw new Error("Link bukan link Google Maps (maps.app.goo.gl atau google.com/maps).");
@@ -169,6 +215,7 @@ export async function importFromGoogleMaps(rawUrl: string): Promise<ImportDraft>
     phone: "",
     website: "",
     photoUrl: "",
+    photos: [],
     mapsUrl: url,
     resolvedUrl: resolved,
     extracted: [],
@@ -250,10 +297,11 @@ export async function importFromGoogleMaps(rawUrl: string): Promise<ImportDraft>
       if (typeof phone === "string") { draft.phone = phone; extracted.add("telepon"); }
       const web = at(p, 7, 0);
       if (typeof web === "string" && /^https?:/.test(web)) { draft.website = web; extracted.add("website"); }
-      const photo = at(p, 72, 0, 0, 6, 0);
-      if (typeof photo === "string" && photo.startsWith("http")) {
-        draft.photoUrl = photo.replace(/=w\d+-h\d+[^&]*$/, "=w1200-h800-k-no");
-        extracted.add("foto");
+      const photos = await collectPhotos(p);
+      if (photos.length) {
+        draft.photos = photos;
+        draft.photoUrl = photos[0];
+        extracted.add(`${photos.length} foto`);
       }
       if (!draft.priceText) {
         const pm = txt.match(/Rp\s?[\d.]+\s?[–-]\s?[\d.]+/);

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LoginForm } from "@/components/admin/LoginForm";
-import { DeleteButton, DeleteSpeedButton, PlaceForm, toForm } from "@/components/admin/PlaceForm";
+import { DeleteButton, DeleteSpeedButton, PlaceForm } from "@/components/admin/PlaceForm";
+import { toForm } from "@/lib/form";
+import { SpeedTest } from "@/components/SpeedTest";
 import { WifiBadge } from "@/components/ui";
 import { isAdmin } from "@/lib/auth";
 import { getPlace } from "@/lib/places";
@@ -21,6 +23,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/admin" className="text-sm font-semibold text-ink-500">← Kembali</Link>
         <div className="flex items-center gap-2">
+          <a href="#speedtest" className="rounded-[10px] bg-mint-600 px-3 py-1.5 text-xs font-semibold text-white">Tes kecepatan</a>
           <Link href={`/tempat/${place.slug}`} className="rounded-[10px] border border-line px-3 py-1.5 text-xs font-semibold">Lihat halaman</Link>
           <DeleteButton id={place.id} name={place.name} redirect="/admin" />
         </div>
@@ -28,13 +31,17 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       {sp.baru && <p className="rounded-[14px] bg-mint-100 px-4 py-3 text-sm font-semibold text-mint-600">Tempat berhasil ditambahkan. Kamu bisa lanjut mengedit di sini.</p>}
       <h1 className="text-2xl font-extrabold">Edit: {place.name}</h1>
       <PlaceForm initial={toForm(place as unknown as Record<string, unknown>)} placeId={place.id} />
+      <section id="speedtest" className="scroll-mt-20">
+        <SpeedTest admin initialSlug={place.slug} places={[{ id: place.id, slug: place.slug, name: place.name, area: place.area, wifi: place.wifi.map((w) => ({ id: w.id, ssid: w.ssid })) }]} />
+      </section>
       <section className="mb-28 space-y-3 rounded-[18px] border border-line bg-white p-4 md:p-5">
         <h2 className="font-bold">Riwayat tes kecepatan ({speeds.length})</h2>
         {speeds.length === 0 && <p className="text-sm text-ink-500">Belum ada tes.</p>}
         {speeds.map((s) => (
           <div key={s.id} className="flex items-center gap-3 border-t border-line pt-2 text-sm first-of-type:border-0">
             <WifiBadge level={levelOf(s.down)} mbps={s.down} />
-            <span className="text-ink-500">↑ {fmtMbps(s.up)} · {s.ping} ms · {place.wifi.find((w) => w.id === s.wifiId)?.ssid ?? "—"} · {timeAgo(s.createdAt)}</span>
+            {s.by === "admin" && <span className="rounded-full bg-espresso-600/10 px-2 py-0.5 text-[11px] font-semibold text-espresso-600">Admin</span>}
+            <span className="min-w-0 truncate text-ink-500">↑ {fmtMbps(s.up)} · {s.ping} ms · {place.wifi.find((w) => w.id === s.wifiId)?.ssid ?? "—"} · {timeAgo(s.createdAt)}</span>
             <span className="ml-auto"><DeleteSpeedButton id={s.id} /></span>
           </div>
         ))}

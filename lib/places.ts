@@ -6,7 +6,7 @@ import { slugify, toView, uid } from "./util";
 
 export async function listPlaces(): Promise<PlaceView[]> {
   const db = await loadDB();
-  return db.places.map((p) => toView(p, db.speeds)).sort((a, b) => Number(a.isExample) - Number(b.isExample) || (b.rating ?? 0) - (a.rating ?? 0));
+  return db.places.map((p) => toView(p, db.speeds)).sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name));
 }
 
 export async function getPlace(slugOrId: string): Promise<{ place: PlaceView; speeds: SpeedResult[] } | null> {
@@ -23,7 +23,7 @@ const numOrNull = (v: unknown, min: number, max: number) => {
   return isFinite(n) && n >= min && n <= max ? n : null;
 };
 
-export function normalizeInput(body: Record<string, unknown>, existing?: Place): Omit<Place, "id" | "slug" | "createdAt" | "updatedAt"> {
+export function normalizeInput(body: Record<string, unknown>): Omit<Place, "id" | "slug" | "createdAt" | "updatedAt"> {
   const catKeys = CATEGORIES.map((c) => c.key as string);
   const facKeys = FACILITIES.map((f) => f.key as string);
   const wifiIn = Array.isArray(body.wifi) ? body.wifi : [];
@@ -41,7 +41,10 @@ export function normalizeInput(body: Record<string, unknown>, existing?: Place):
   const is24h = !!body.is24h;
   const categories = (Array.isArray(body.categories) ? body.categories : []).filter((c): c is string => typeof c === "string" && catKeys.includes(c));
   if (is24h && !categories.includes("24jam")) categories.push("24jam");
-  const photo = str(body.photoUrl, 1000);
+  const photosIn = Array.isArray(body.photos) ? body.photos : [];
+  const photos = [...new Set(photosIn.map((x) => str(x, 1000)).filter((u) => /^https:\/\//.test(u)))].slice(0, 60);
+  const cover = str(body.photoUrl, 1000);
+  if (/^https:\/\//.test(cover) && !photos.includes(cover)) photos.unshift(cover);
   return {
     name: str(body.name, 120),
     address: str(body.address, 300),
@@ -58,10 +61,10 @@ export function normalizeInput(body: Record<string, unknown>, existing?: Place):
     facilities: (Array.isArray(body.facilities) ? body.facilities : []).filter((c): c is string => typeof c === "string" && facKeys.includes(c)),
     phone: str(body.phone, 40),
     website: /^https?:\/\//.test(str(body.website)) ? str(body.website, 300) : "",
-    photoUrl: /^https:\/\//.test(photo) ? photo : "",
+    photoUrl: photos[0] || "",
+    photos,
     mapsUrl: str(body.mapsUrl, 1000),
     description: str(body.description, 1000),
-    isExample: existing ? existing.isExample && body.isExample !== false : !!body.isExample,
     wifi,
   };
 }
@@ -84,7 +87,7 @@ export async function updatePlace(id: string, body: Record<string, unknown>): Pr
   return mutateDB((db) => {
     const idx = db.places.findIndex((p) => p.id === id);
     if (idx < 0) throw new Error("Tempat tidak ditemukan");
-    const data = normalizeInput(body, db.places[idx]);
+    const data = normalizeInput(body);
     if (!data.name) throw new Error("Nama tempat wajib diisi");
     const place = { ...db.places[idx], ...data, updatedAt: new Date().toISOString() };
     db.places[idx] = place;
@@ -99,7 +102,7 @@ export async function deletePlace(id: string): Promise<void> {
   });
 }
 
-export async function addSpeed(input: Record<string, unknown>): Promise<SpeedResult> {
+export async function addSpeed(input: Record<string, unknown>, by: SpeedResult["by"] = "pengunjung"): Promise<SpeedResult> {
   const down = numOrNull(input.down, 0, 10000), up = numOrNull(input.up, 0, 10000);
   const ping = numOrNull(input.ping, 0, 10000), jitter = numOrNull(input.jitter, 0, 10000);
   if (down == null || up == null || ping == null) throw new Error("Hasil tes tidak valid");
@@ -117,6 +120,7 @@ export async function addSpeed(input: Record<string, unknown>): Promise<SpeedRes
       ping: Math.round(ping),
       jitter: Math.round((jitter ?? 0) * 10) / 10,
       server: str(input.server, 40) || "Cloudflare",
+      by,
       createdAt: new Date().toISOString(),
     };
     db.speeds.push(r);

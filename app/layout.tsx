@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <div className="pb-24 md:pb-0">{children}</div>
         <footer className="hidden border-t border-line py-8 text-center text-sm text-ink-500 md:block">
-          Nongki · Diseduh di Malang · Data tempat bertanda <span className="font-semibold">Contoh</span> hanya ilustrasi
+          Nongki · Diseduh di Malang · Data tempat & foto dari Google Maps, kecepatan internet dari tes pengunjung
         </footer>
         <BottomNav />
       </body>

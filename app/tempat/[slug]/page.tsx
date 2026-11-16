@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { ShareButton, WifiList } from "@/components/PlaceClient";
-import { ExampleTag, Photo, priceLabel, Rating, Tag, WifiBadge } from "@/components/ui";
+import { GalleryGrid, GalleryHero } from "@/components/Gallery";
+import { gradFor, priceLabel, Rating, Tag, WifiBadge } from "@/components/ui";
 import { getPlace } from "@/lib/places";
 import { FACILITIES } from "@/lib/types";
-import { fmtMbps, levelOf, mapsRouteUrl, timeAgo } from "@/lib/util";
+import { fmtMbps, levelOf, mapsRouteUrl, openStatus, timeAgo } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function Detail({ params }: Props) {
   const { place: p, speeds } = r;
   const facs = FACILITIES.filter((f) => p.facilities.includes(f.key));
   const wifiName = (id: string | null) => p.wifi.find((w) => w.id === id)?.ssid;
+  const status = openStatus(p);
   const today = new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(new Date());
 
   const info = (
@@ -70,23 +72,18 @@ export default async function Detail({ params }: Props) {
 
   return (
     <main className="mx-auto max-w-6xl md:px-6 md:py-8">
-      <div className="md:grid md:grid-cols-[1.1fr_0.9fr] md:gap-8">
+      <GalleryHero photos={p.photos} name={p.name} fallback={gradFor(p.id)} />
+      <div className="md:mt-2 md:grid md:grid-cols-[1.1fr_0.9fr] md:gap-8 [&>*]:min-w-0">
         <div>
-          <Photo place={p} className="h-72 md:h-96 md:rounded-[26px]">
-            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/40" />
-            <div className="absolute inset-x-4 top-4 flex justify-between md:hidden">
-              <Link href="/jelajah" aria-label="Kembali" className="grid size-10 place-items-center rounded-full bg-white/90 text-espresso-900">
-                <Icon name="back" size={20} />
-              </Link>
-            </div>
-            {p.photoUrl && <span className="absolute bottom-10 left-4 rounded-full bg-black/40 px-2.5 py-1 text-xs font-semibold text-white md:bottom-4">Foto dari Google Maps</span>}
-          </Photo>
           <div className="relative -mt-6 space-y-6 rounded-t-[24px] bg-cream-50 px-4 pt-5 pb-6 md:mt-6 md:rounded-none md:bg-transparent md:px-0">
             <div className="space-y-2">
               <div className="flex flex-wrap gap-1.5">
-                {p.isExample && <ExampleTag />}
                 {p.categories.includes("kopi") && <Tag>Kedai kopi</Tag>}
-                {p.is24h && <Tag>Buka 24 jam</Tag>}
+                {status && (
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${status.open ? "bg-mint-100 text-mint-600" : "bg-slow-100 text-slow-600"}`}>
+                    <span className={`size-1.5 rounded-full ${status.open ? "bg-mint-600" : "bg-slow-600"}`} /> {status.label}
+                  </span>
+                )}
                 {priceLabel(p) && <Tag>{priceLabel(p)}</Tag>}
               </div>
               <h1 className="text-2xl leading-tight font-extrabold md:text-3xl">{p.name}</h1>
@@ -131,7 +128,7 @@ export default async function Detail({ params }: Props) {
             <div className="space-y-4 rounded-[18px] border border-line bg-white p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-xs text-ink-500">Rata-rata {Math.min(speeds.length, 5)} tes terakhir</p>
+                  <p className="text-xs text-ink-500">{speeds.length ? `Rata-rata ${Math.min(speeds.length, 5)} tes terakhir` : "Belum ada tes kecepatan"}</p>
                   <p className="text-4xl font-extrabold tracking-tight">
                     {fmtMbps(p.avgDown)} <span className="text-sm font-semibold text-ink-500">Mbps</span>
                   </p>
@@ -178,6 +175,11 @@ export default async function Detail({ params }: Props) {
                           Ping {s.ping} ms • jitter {fmtMbps(s.jitter)} ms • {timeAgo(s.createdAt)}
                           {wifiName(s.wifiId) ? ` • ${wifiName(s.wifiId)}` : ""}
                         </p>
+                        {s.by === "admin" && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-espresso-600/10 px-2 py-0.5 text-[11px] font-semibold text-espresso-600">
+                            <Icon name="shield" size={11} strokeWidth={2.6} /> Diukur admin di lokasi
+                          </span>
+                        )}
                       </div>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LVC[lv]}`}>{lv}</span>
                     </div>
@@ -187,6 +189,9 @@ export default async function Detail({ params }: Props) {
             )}
           </section>
         </div>
+      </div>
+      <div className="px-4 pb-10 md:px-0">
+        <GalleryGrid photos={p.photos} name={p.name} />
       </div>
     </main>
   );

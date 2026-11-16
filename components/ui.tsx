@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { PlaceView, SpeedLevel } from "@/lib/types";
 import { PRICE_LABEL } from "@/lib/types";
-import { fmtMbps } from "@/lib/util";
+import { fmtMbps, photoSize } from "@/lib/util";
 import { Icon } from "./Icon";
 
 const GRADS = [
@@ -20,12 +20,12 @@ export function gradFor(id: string) {
   return `linear-gradient(135deg, ${a}, ${b})`;
 }
 
-export function Photo({ place, className = "", children }: { place: Pick<PlaceView, "id" | "photoUrl" | "name">; className?: string; children?: React.ReactNode }) {
+export function Photo({ place, className = "", children, w = 640, h = 480 }: { place: Pick<PlaceView, "id" | "photoUrl" | "name">; className?: string; children?: React.ReactNode; w?: number; h?: number }) {
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ background: gradFor(place.id) }}>
       {place.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={place.photoUrl} alt={place.name} className="absolute inset-0 size-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+        <img src={photoSize(place.photoUrl, w, h)} alt={place.name} className="absolute inset-0 size-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
       ) : (
         <div className="absolute inset-0 grid place-items-center text-white/35">
           <Icon name="coffee" size={40} />
@@ -61,9 +61,6 @@ export function Tag({ children, className = "" }: { children: React.ReactNode; c
   return <span className={`inline-flex items-center rounded-full bg-cream-100 px-2.5 py-0.5 text-xs font-semibold text-espresso-600 ${className}`}>{children}</span>;
 }
 
-export function ExampleTag() {
-  return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold tracking-wide text-amber-500 uppercase">Contoh</span>;
-}
 
 export function Rating({ place }: { place: Pick<PlaceView, "rating" | "reviews"> }) {
   if (place.rating == null) return <span className="text-xs text-ink-500">Belum ada rating</span>;
@@ -87,7 +84,6 @@ export function PlaceCard({ place }: { place: PlaceView }) {
       <Photo place={place} className="h-36">
         <div className="absolute inset-x-2.5 top-2.5 flex items-start justify-between">
           <WifiBadge level={place.level} mbps={place.avgDown} />
-          {place.isExample && <ExampleTag />}
         </div>
       </Photo>
       <div className="space-y-1.5 p-3">
@@ -117,7 +113,6 @@ export function PlaceRow({ place, extra }: { place: PlaceView; extra?: React.Rea
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex items-center gap-2">
           <h3 className="truncate text-sm font-semibold">{place.name}</h3>
-          {place.isExample && <ExampleTag />}
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <Rating place={place} />

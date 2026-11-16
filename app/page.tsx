@@ -91,13 +91,22 @@ export default async function Home() {
           <section className="space-y-3">
             <SectionHeader title="WiFi paling kencang" href="/jelajah?sort=wifi" />
             <div className="space-y-3">
-              {fastest.length ? fastest.map((p) => <PlaceRow key={p.id} place={p} />) : <p className="text-sm text-ink-500">Belum ada hasil speed test.</p>}
+              {fastest.length ? fastest.map((p) => <PlaceRow key={p.id} place={p} />) : (
+                <Link href="/cek-speed" className="flex items-center gap-3 rounded-[18px] border border-dashed border-line bg-white p-4 text-sm text-ink-500 hover:border-mint-600">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-[14px] bg-mint-100 text-mint-600">
+                    <Icon name="zap" size={18} />
+                  </span>
+                  <span>
+                    <b className="block text-ink-900">Belum ada hasil speed test</b>Lagi di salah satu tempat? Jadilah yang pertama mengukur WiFi-nya.
+                  </span>
+                </Link>
+              )}
             </div>
           </section>
           <section className="space-y-3">
             <SectionHeader title="Buka 24 jam" href="/jelajah?cat=24jam" />
             <div className="space-y-3">
-              {open24.length ? open24.map((p) => <PlaceRow key={p.id} place={p} />) : <p className="text-sm text-ink-500">Belum ada tempat 24 jam.</p>}
+              {open24.length ? open24.map((p) => <PlaceRow key={p.id} place={p} />) : <p className="rounded-[18px] border border-dashed border-line p-4 text-sm text-ink-500">Belum ada tempat 24 jam.</p>}
             </div>
           </section>
         </div>

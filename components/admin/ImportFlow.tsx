@@ -22,7 +22,7 @@ export function ImportFlow() {
       const j = await res.json();
       if (!j.ok) throw new Error(j.error || "Gagal mengambil data");
       setDraft(j.draft);
-      setForm(toForm({ ...j.draft, facilities: ["wifi"] }));
+      setForm(toForm({ ...j.draft, facilities: [] }));
       setKey((k) => k + 1);
     } catch (e) {
       setErr((e as Error).message);
@@ -48,7 +48,7 @@ export function ImportFlow() {
           </button>
         </div>
         {err && <p className="rounded-[12px] bg-slow-100 px-3 py-2 text-sm font-semibold text-slow-600">{err}</p>}
-        <button type="button" onClick={() => { setDraft(null); setForm(toForm({ facilities: ["wifi"] })); setKey((k) => k + 1); }} className="text-xs font-semibold text-ink-500 underline">
+        <button type="button" onClick={() => { setDraft(null); setForm(toForm({ facilities: [] })); setKey((k) => k + 1); }} className="text-xs font-semibold text-ink-500 underline">
           Isi manual tanpa link
         </button>
       </form>

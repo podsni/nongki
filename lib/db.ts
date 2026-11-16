@@ -1,24 +1,39 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
-import type { DB } from "./types";
-import { SEED } from "./seed";
+import type { DB, Place } from "./types";
 
 const BLOB_PATH = "nongki/db.json";
 const LOCAL_FILE = path.join(process.cwd(), ".data", "db.json");
 
-function useBlob() {
+function blobEnabled() {
   return !!process.env.BLOB_READ_WRITE_TOKEN;
 }
 
 export function storageMode(): "blob" | "file" {
-  return useBlob() ? "blob" : "file";
+  return blobEnabled() ? "blob" : "file";
+}
+
+const EMPTY = (): DB => ({ version: 2, places: [], speeds: [] });
+
+// Migrasi ringan untuk data lama: pastikan field baru ada.
+function normalize(db: DB): DB {
+  db.places = (db.places || []).map((p) => {
+    const raw = p as Place & { isExample?: boolean };
+    delete raw.isExample;
+    const photos = Array.isArray(raw.photos) ? raw.photos : raw.photoUrl ? [raw.photoUrl] : [];
+    return { ...raw, photos, photoUrl: photos[0] || "" };
+  });
+  db.speeds = (db.speeds || []).map((s) => ({ ...s, by: s.by === "admin" ? "admin" : "pengunjung" }));
+  db.version = 2;
+  return db;
 }
 
 async function readBlob(): Promise<DB | null> {
   const { get } = await import("@vercel/blob");
   const res = await get(BLOB_PATH, { access: "private", useCache: false });
-  if (!res || res.statusCode !== 200 || !res.stream) return null;
+  if (!res) return null; // belum ada file sama sekali
+  if (res.statusCode !== 200 || !res.stream) throw new Error("Gagal membaca database (Blob)");
   const text = await new Response(res.stream).text();
   return JSON.parse(text) as DB;
 }
@@ -35,24 +50,17 @@ async function writeBlob(db: DB) {
 }
 
 export async function loadDB(): Promise<DB> {
-  if (useBlob()) {
-    const db = await readBlob();
-    if (db) return db;
-    const seed = structuredClone(SEED);
-    await writeBlob(seed);
-    return seed;
-  }
+  if (blobEnabled()) return normalize((await readBlob()) ?? EMPTY());
   try {
-    return JSON.parse(await fs.readFile(LOCAL_FILE, "utf8")) as DB;
-  } catch {
-    const seed = structuredClone(SEED);
-    await saveDB(seed);
-    return seed;
+    return normalize(JSON.parse(await fs.readFile(LOCAL_FILE, "utf8")) as DB);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return EMPTY();
+    throw e;
   }
 }
 
 export async function saveDB(db: DB) {
-  if (useBlob()) return writeBlob(db);
+  if (blobEnabled()) return writeBlob(db);
   await fs.mkdir(path.dirname(LOCAL_FILE), { recursive: true });
   await fs.writeFile(LOCAL_FILE, JSON.stringify(db, null, 2));
 }

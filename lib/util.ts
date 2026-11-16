@@ -54,3 +54,37 @@ export function timeAgo(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 }
+
+/** Ubah ukuran URL foto Google (lh*.googleusercontent.com/...=w..-h..) agar hemat kuota. */
+export function photoSize(url: string, w: number, h: number) {
+  if (!/googleusercontent\.com\//.test(url)) return url;
+  const base = url.replace(/=[^/]*$/, "");
+  return `${base}=w${w}-h${h}-k-no`;
+}
+
+/** Status buka sekarang (zona Asia/Jakarta) dari baris jam buka Google, mis. "15.00–23.00". */
+export function openStatus(p: { is24h: boolean; hours: { day: string; text: string }[] }, now = new Date()): { open: boolean; label: string } | null {
+  if (p.is24h) return { open: true, label: "Buka 24 jam" };
+  if (!p.hours.length) return null;
+  const fmt = new Intl.DateTimeFormat("id-ID", { weekday: "long", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" });
+  const parts = Object.fromEntries(fmt.formatToParts(now).map((x) => [x.type, x.value]));
+  const day = String(parts.weekday).toLowerCase();
+  const mins = Number(parts.hour) * 60 + Number(parts.minute);
+  const days = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+  const rowOf = (d: string) => p.hours.find((h) => h.day.toLowerCase() === d);
+  const ranges = (t: string) =>
+    [...t.matchAll(/(\d{1,2})[.:](\d{2})\s*[–-]\s*(\d{1,2})[.:](\d{2})/g)].map((m) => [Number(m[1]) * 60 + Number(m[2]), Number(m[3]) * 60 + Number(m[4])] as const);
+  const today = rowOf(day);
+  if (!today) return null;
+  if (/24 jam/i.test(today.text)) return { open: true, label: "Buka 24 jam hari ini" };
+  for (const [a, b] of ranges(today.text)) {
+    const end = b <= a ? b + 1440 : b;
+    if (mins >= a && mins < end) return { open: true, label: `Buka · tutup ${String(Math.floor((b % 1440) / 60)).padStart(2, "0")}.${String(b % 60).padStart(2, "0")}` };
+  }
+  // shift malam kemarin yang lewat tengah malam
+  const yest = rowOf(days[(days.indexOf(day) + 6) % 7]);
+  for (const [a, b] of yest ? ranges(yest.text) : []) if (b <= a && mins < b) return { open: true, label: "Buka sekarang" };
+  const next = ranges(today.text).find(([a]) => a > mins);
+  if (next) return { open: false, label: `Tutup · buka ${String(Math.floor(next[0] / 60)).padStart(2, "0")}.${String(next[0] % 60).padStart(2, "0")}` };
+  return { open: false, label: /tutup/i.test(today.text) ? "Tutup hari ini" : "Tutup sekarang" };
+}
