@@ -44,7 +44,7 @@ export function ShareSheet({ url: serverUrl, title, text: serverText, storyUrl, 
   const toast = useToast();
   const closeRef = useRef<HTMLButtonElement>(null);
   const fileName = `nongki-${slug}-story.png`;
-  const plain = text.replace(url, "").trim();
+  const plain = text.replace(url, "").replace(/\*/g, "").trim(); // tanpa format tebal ala WhatsApp
 
   async function loadFile(): Promise<File | null> {
     if (file) return file;
