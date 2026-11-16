@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-espresso-900: #2b1a12;
+  --color-espresso-700: #4a2c1d;
+  --color-espresso-600: #6b3f26;
+  --color-espresso-400: #9a6a4c;
+  --color-caramel-500: #c8864b;
+  --color-caramel-100: #f7e4d0;
+  --color-cream-200: #eadccb;
+  --color-cream-100: #f4eadf;
+  --color-cream-50: #fbf7f2;
+  --color-mint-600: #0f9d7a;
+  --color-mint-100: #d6f2e9;
+  --color-amber-500: #e9952b;
+  --color-amber-100: #fcebd3;
+  --color-slow-600: #d14343;
+  --color-slow-100: #fae1e1;
+  --color-ink-900: #1e1814;
+  --color-ink-500: #7a6e66;
+  --color-ink-300: #cbbfb4;
+  --color-line: #e9e1d9;
+  --color-star: #f5b301;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --shadow-card: 0 4px 16px rgba(43, 26, 18, 0.08);
+  --shadow-sticky: 0 -4px 20px rgba(43, 26, 18, 0.1);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-cream-50);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+}
+
+.pin-marker {
+  background: transparent;
+  border: 0;
+}

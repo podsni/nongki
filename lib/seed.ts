@@ -1,0 +1,102 @@
+import type { DB, Place } from "./types";
+
+const now = new Date("2026-11-16T05:00:00Z").toISOString();
+const week = (text: string) => ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"].map((day) => ({ day, text }));
+
+function ex(p: Partial<Place> & Pick<Place, "id" | "slug" | "name">): Place {
+  return {
+    address: "",
+    area: "Malang",
+    lat: null,
+    lng: null,
+    rating: null,
+    reviews: null,
+    priceLevel: null,
+    priceText: "",
+    hours: [],
+    is24h: false,
+    categories: [],
+    facilities: [],
+    phone: "",
+    website: "",
+    photoUrl: "",
+    mapsUrl: "",
+    description: "",
+    isExample: true,
+    wifi: [],
+    createdAt: now,
+    updatedAt: now,
+    ...p,
+  };
+}
+
+// Data contoh (bukan tempat asli) — ditandai isExample = true dan diberi label "Contoh" di UI.
+export const SEED: DB = {
+  version: 1,
+  places: [
+    ex({
+      id: "contoh-seduh",
+      slug: "contoh-ruang-seduh-soehat",
+      name: "Ruang Seduh Soehat (contoh)",
+      address: "Jl. Soekarno Hatta, Lowokwaru, Kota Malang (alamat contoh)",
+      area: "Lowokwaru, Malang",
+      lat: -7.9441,
+      lng: 112.6215,
+      rating: 4.6,
+      reviews: 341,
+      priceLevel: 2,
+      priceText: "Rp18–40rb",
+      hours: week("08.00–23.00"),
+      categories: ["kopi", "wfc"],
+      facilities: ["wifi", "colokan", "ac", "musala", "toilet"],
+      description: "Tempat contoh untuk demo: kafe tenang untuk kerja (WFC).",
+      wifi: [
+        { id: "w-seduh-1", ssid: "RuangSeduh_Guest", password: "seduhpelan123", note: "Lantai 1" },
+        { id: "w-seduh-2", ssid: "RuangSeduh_5G", password: "kopisusu2026", note: "Lantai 2, dekat jendela" },
+      ],
+    }),
+    ex({
+      id: "contoh-senja",
+      slug: "contoh-kedai-senja-ijen",
+      name: "Kedai Senja Ijen (contoh)",
+      address: "Jl. Ijen, Klojen, Kota Malang (alamat contoh)",
+      area: "Klojen, Malang",
+      lat: -7.9705,
+      lng: 112.6233,
+      rating: 4.7,
+      reviews: 518,
+      priceLevel: 2,
+      priceText: "Rp20–45rb",
+      hours: week("10.00–00.00"),
+      categories: ["kopi", "nongkrong"],
+      facilities: ["wifi", "outdoor", "smoking", "parkir", "livemusic"],
+      description: "Tempat contoh untuk demo: cocok nongkrong sore sampai malam.",
+      wifi: [{ id: "w-senja-1", ssid: "SenjaIjen", password: "senjaindah", note: "Semua area" }],
+    }),
+    ex({
+      id: "contoh-pojok",
+      slug: "contoh-pojok-kopi-dinoyo",
+      name: "Pojok Kopi Dinoyo (contoh)",
+      address: "Jl. MT Haryono, Dinoyo, Kota Malang (alamat contoh)",
+      area: "Lowokwaru, Malang",
+      lat: -7.9393,
+      lng: 112.6087,
+      rating: 4.3,
+      reviews: 189,
+      priceLevel: 1,
+      priceText: "Rp8–20rb",
+      hours: week("Buka 24 jam"),
+      is24h: true,
+      categories: ["kopi", "nongkrong"],
+      facilities: ["wifi", "colokan", "parkir", "smoking"],
+      description: "Tempat contoh untuk demo: warkop murah buka 24 jam.",
+      wifi: [{ id: "w-pojok-1", ssid: "PojokKopi_Free", password: "pojok2026", note: "Minta ke kasir kalau ganti" }],
+    }),
+  ],
+  speeds: [
+    { id: "s1", placeId: "contoh-seduh", wifiId: "w-seduh-2", down: 87.2, up: 31.5, ping: 14, jitter: 2.1, server: "contoh", createdAt: "2026-11-15T07:20:00Z" },
+    { id: "s2", placeId: "contoh-seduh", wifiId: "w-seduh-1", down: 52.4, up: 21.8, ping: 18, jitter: 3.2, server: "contoh", createdAt: "2026-11-14T12:05:00Z" },
+    { id: "s3", placeId: "contoh-senja", wifiId: null, down: 21.7, up: 8.2, ping: 34, jitter: 6.5, server: "contoh", createdAt: "2026-11-13T11:40:00Z" },
+    { id: "s4", placeId: "contoh-pojok", wifiId: null, down: 6.1, up: 2.4, ping: 48, jitter: 11, server: "contoh", createdAt: "2026-11-12T15:10:00Z" },
+  ],
+};
