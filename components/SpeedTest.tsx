@@ -3,9 +3,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmtMbps, levelOf } from "@/lib/util";
+import { computeStats } from "@/lib/wifistats";
+import type { SpeedResult } from "@/lib/types";
 import { Icon } from "./Icon";
+import { WifiDetails } from "./WifiDetails";
 
 type PlaceOpt = { id: string; slug: string; name: string; area: string; wifi: { id: string; ssid: string }[] };
+type Run = { down: number; up: number; ping: number; jitter: number; loss: number; at: string };
 type Phase = "idle" | "ping" | "download" | "upload" | "done" | "error";
 type Server = { key: "cf" | "nongki"; label: string; ping: () => string; down: (b: number) => string; up: string };
 
@@ -87,23 +91,44 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
   const [placeId, setPlaceId] = useState(places.find((p) => p.slug === initialSlug)?.id ?? "");
   const [wifiId, setWifiId] = useState("");
   const [saved, setSaved] = useState<"" | "saving" | "ok" | string>("");
+  const [loss, setLoss] = useState<number | null>(null);
+  const [count, setCount] = useState(admin ? 5 : 1); // jumlah tes per sesi
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [runNo, setRunNo] = useState(0);
+  const runRef = useRef({ i: 0, n: 1 });
+  const prog = (p: number) => setProgress((runRef.current.i + p) / runRef.current.n);
   const abort = useRef<AbortController | null>(null);
   const place = places.find((p) => p.id === placeId);
 
+  // Ping, jitter & packet loss: 20 permintaan kecil berurutan, timeout 1,5 dtk.
+  // Permintaan yang gagal/timeout dihitung sebagai "loss" (estimasi di level HTTP).
   async function measurePing(s: Server) {
+    const N = 20;
     const rtts: number[] = [];
-    for (let i = 0; i < 12; i++) {
+    let lost = 0;
+    for (let i = 0; i < N + 1; i++) {
       const t0 = performance.now();
-      const res = await fetch(s.ping(), { cache: "no-store", signal: abort.current?.signal });
-      await res.arrayBuffer();
-      const dt = performance.now() - t0;
-      if (i > 0) rtts.push(dt);
-      setProgress(0.12 * ((i + 1) / 12));
+      try {
+        const sig = abort.current ? AbortSignal.any([abort.current.signal, AbortSignal.timeout(1500)]) : AbortSignal.timeout(1500);
+        const res = await fetch(s.ping(), { cache: "no-store", signal: sig });
+        await res.arrayBuffer();
+        if (!res.ok) throw new Error("status " + res.status);
+        if (i > 0) rtts.push(performance.now() - t0);
+      } catch (e) {
+        if (abort.current?.signal.aborted) throw e;
+        if (i > 0) lost++;
+        else if (rtts.length === 0 && i === 0) {
+          // permintaan pemanasan gagal: kemungkinan server tidak bisa dijangkau
+          throw new Error("Server tidak bisa dijangkau");
+        }
+      }
+      prog(0.12 * ((i + 1) / (N + 1)));
     }
+    if (rtts.length < N / 2) throw new Error("Terlalu banyak paket hilang");
     const p = median(rtts);
     const diffs = rtts.slice(1).map((v, i) => Math.abs(v - rtts[i]));
     const j = diffs.reduce((a, b) => a + b, 0) / Math.max(1, diffs.length);
-    return { p, j };
+    return { p, j, loss: (lost / N) * 100 };
   }
 
   async function measureDown(s: Server, seconds = 8) {
@@ -137,7 +162,7 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
       const t = warmT ? (now - warmT) / 1000 : (now - start) / 1000;
       const b = warmT ? bytes - warmBytes : bytes;
       if (t > 0.2) setLive((b * 8) / t / 1e6);
-      setProgress(0.12 + 0.48 * Math.min(1, (now - start) / (seconds * 1000)));
+      prog(0.12 + 0.48 * Math.min(1, (now - start) / (seconds * 1000)));
     }, 200);
     const workers = Array.from({ length: 4 }, worker);
     await Promise.race([Promise.allSettled(workers), sleep(seconds * 1000 + 1500)]);
@@ -181,7 +206,7 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
       const now = performance.now();
       const t = (now - start) / 1000;
       if (t > 0.3) setLive((bytes * 8) / t / 1e6);
-      setProgress(0.6 + 0.4 * Math.min(1, (now - start) / (seconds * 1000)));
+      prog(0.6 + 0.4 * Math.min(1, (now - start) / (seconds * 1000)));
     }, 200);
     await Promise.race([Promise.allSettled(Array.from({ length: 3 }, worker)), sleep(seconds * 1000 + 1500)]);
     xhrs.forEach((x) => x.abort());
@@ -191,47 +216,69 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
     return (bytes * 8) / t / 1e6;
   }
 
+  async function runOnce(s0: Server): Promise<{ run: Run; server: Server }> {
+    setPing(null);
+    setJitter(null);
+    setLoss(null);
+    setDown(null);
+    setUp(null);
+    setLive(null);
+    setPhase("ping");
+    let s = s0;
+    let pj;
+    try {
+      pj = await measurePing(s);
+    } catch (e) {
+      if (abort.current?.signal.aborted || s.key !== "cf") throw e;
+      s = SERVERS[1];
+      pj = await measurePing(s);
+    }
+    setServer(s);
+    setPing(pj.p);
+    setJitter(pj.j);
+    setLoss(pj.loss);
+    setPhase("download");
+    const short = runRef.current.n > 1;
+    const d = await measureDown(s, short ? 6 : 8);
+    setDown(d);
+    setLive(null);
+    setPhase("upload");
+    const u = await measureUp(s, short ? 5 : 7);
+    setUp(u);
+    setLive(null);
+    return { run: { down: d, up: u, ping: pj.p, jitter: pj.j, loss: pj.loss, at: new Date().toISOString() }, server: s };
+  }
+
   async function run() {
     abort.current?.abort();
     abort.current = new AbortController();
     setErr("");
     setSaved("");
-    setPing(null);
-    setJitter(null);
-    setDown(null);
-    setUp(null);
-    setLive(null);
+    setRuns([]);
     setProgress(0);
+    const n = count;
+    runRef.current = { i: 0, n };
+    const done: Run[] = [];
+    let s = SERVERS[0];
     try {
-      setPhase("ping");
-      let s = SERVERS[0];
-      let pj;
-      try {
-        pj = await measurePing(s);
-      } catch {
-        s = SERVERS[1];
-        pj = await measurePing(s);
+      for (let i = 0; i < n; i++) {
+        runRef.current.i = i;
+        setRunNo(i + 1);
+        const r = await runOnce(s);
+        s = r.server;
+        done.push(r.run);
+        setRuns([...done]);
+        if (i < n - 1) await sleep(1500);
       }
-      setServer(s);
-      setPing(pj.p);
-      setJitter(pj.j);
-      setPhase("download");
-      const d = await measureDown(s);
-      setDown(d);
-      setLive(null);
-      setPhase("upload");
-      const u = await measureUp(s);
-      setUp(u);
-      setLive(null);
       setProgress(1);
       setPhase("done");
     } catch (e) {
-      if ((e as Error).name === "AbortError") {
-        setPhase("idle");
+      if ((e as Error).name === "AbortError" || abort.current?.signal.aborted) {
+        setPhase(done.length ? "done" : "idle");
         return;
       }
       setErr("Tes gagal: " + ((e as Error).message || "periksa koneksi") + ". Coba lagi.");
-      setPhase("error");
+      setPhase(done.length ? "done" : "error");
     }
   }
 
@@ -243,12 +290,12 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
   }
 
   async function save() {
-    if (!placeId || down == null || up == null || ping == null) return;
+    if (!placeId || !runs.length) return;
     setSaved("saving");
     const res = await fetch(admin ? "/api/admin/speeds" : "/api/speed/results", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ placeId, wifiId: wifiId || null, down, up, ping, jitter, server: server.key === "cf" ? "Cloudflare" : "Nongki" }),
+      body: JSON.stringify({ placeId, wifiId: wifiId || null, server: server.key === "cf" ? "Cloudflare" : "Nongki", results: runs }),
     });
     const j = await res.json().catch(() => ({ ok: false, error: "Respons server tidak valid" }));
     setSaved(j.ok ? "ok" : j.error || "Gagal menyimpan");
@@ -260,6 +307,10 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
     if (phase === "done" && window.innerWidth < 768) saveRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [phase]);
 
+  const sessionStats = useMemo(
+    () => (runs.length ? computeStats(runs.map((r, i) => ({ id: String(i), placeId: "", wifiId: null, server: "", by: "admin", createdAt: r.at, ...r }) as SpeedResult)) : null),
+    [runs],
+  );
   const running = phase === "ping" || phase === "download" || phase === "upload";
   const lv = levelOf(down);
   const gaugeVal = phase === "download" || phase === "upload" ? live : phase === "done" ? down : null;
@@ -309,10 +360,23 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
           </div>
           <div className="grid grid-cols-2 gap-2">
             {tile("activity", "Ping", ping, "ms", st("ping"), 0)}
-            {tile("activity", "Jitter", jitter, "ms", st("ping"))}
+            {tile("activity", "Jitter · loss", jitter, loss != null ? `ms · ${fmtMbps(loss)}%` : "ms", st("ping"))}
             {tile("arrowdown", "Download", phase === "download" ? live : down, "Mbps", st("download"))}
             {tile("arrowup", "Upload", phase === "upload" ? live : up, "Mbps", st("upload"))}
           </div>
+          {admin && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-cream-200">Jumlah tes per sesi</span>
+              <div className="ml-auto flex rounded-full bg-white/10 p-1" role="radiogroup" aria-label="Jumlah tes">
+                {[1, 3, 5].map((c) => (
+                  <button key={c} role="radio" aria-checked={count === c} disabled={running} onClick={() => setCount(c)} className={`h-8 min-w-10 rounded-full px-3 text-xs font-bold ${count === c ? "bg-caramel-500 text-white" : "text-cream-200"}`}>
+                    {c}×
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {running && runRef.current.n > 1 && <p className="text-center text-xs font-semibold text-caramel-500">Tes {runNo} dari {runRef.current.n}</p>}
           {err && <p className="rounded-[10px] bg-slow-100 px-3 py-2 text-sm font-semibold text-slow-600">{err}</p>}
           {running ? (
             <button onClick={cancel} className="h-12 w-full rounded-[14px] border-[1.5px] border-white/60 font-semibold text-white">
@@ -320,13 +384,42 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
             </button>
           ) : (
             <button onClick={run} className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-mint-600 font-semibold text-white hover:opacity-90">
-              <Icon name={phase === "done" ? "refresh" : "zap"} size={18} /> {phase === "done" || phase === "error" ? "Tes ulang" : "Mulai tes"}
+              <Icon name={phase === "done" ? "refresh" : "zap"} size={18} /> {phase === "done" || phase === "error" ? "Tes ulang" : count > 1 ? `Jalankan ${count} tes` : "Mulai tes"}
             </button>
           )}
-          <p className="text-center text-xs text-cream-200/70">Tes memakai ±50–150 MB kuota. Dekati router agar hasil akurat.</p>
+          <p className="text-center text-xs text-cream-200/70">Satu tes memakai ±50–150 MB kuota{count > 1 ? ` (×${count})` : ""}. Dekati router agar hasil akurat.</p>
         </section>
 
         <section className={`space-y-4 ${admin ? "" : "px-4 pb-6 md:px-0"}`}>
+          {sessionStats && (
+            <WifiDetails stats={sessionStats} title="WiFi details — sesi ini" subtitle={`${runs.length} tes · ${server.key === "cf" ? "Cloudflare" : "server Nongki"}`} />
+          )}
+          {runs.length > 1 && (
+            <div className="overflow-x-auto rounded-[18px] border border-line bg-white">
+              <table className="w-full min-w-[420px] text-left text-xs tabular-nums">
+                <thead className="bg-cream-100 text-ink-500">
+                  <tr>
+                    {["#", "Down", "Up", "Ping", "Jitter", "Loss", "Jam"].map((h) => (
+                      <th key={h} className="px-3 py-2 font-semibold">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {runs.map((r, i) => (
+                    <tr key={r.at}>
+                      <td className="px-3 py-2">{i + 1}</td>
+                      <td className="px-3 py-2 font-semibold">{fmtMbps(r.down)}</td>
+                      <td className="px-3 py-2">{fmtMbps(r.up)}</td>
+                      <td className="px-3 py-2">{fmtMbps(r.ping)} ms</td>
+                      <td className="px-3 py-2">{fmtMbps(r.jitter)} ms</td>
+                      <td className="px-3 py-2">{fmtMbps(r.loss)}%</td>
+                      <td className="px-3 py-2">{new Date(r.at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Jakarta" })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {phase === "done" && down != null ? (
             <div className="space-y-4 rounded-[18px] border border-line bg-white p-4">
               <div className={`flex items-center gap-2 rounded-[14px] px-4 py-3 font-semibold text-white ${lv === "Cepat" ? "bg-mint-600" : lv === "Sedang" ? "bg-amber-500" : "bg-slow-600"}`}>
@@ -344,7 +437,7 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
           ) : (
             <div className="space-y-2 rounded-[18px] border border-line bg-white p-4 text-sm text-ink-500">
               <p className="font-semibold text-ink-900">Cara kerja</p>
-              <p>Ping &amp; jitter diukur dari 12 permintaan kecil, lalu download &amp; upload diukur ±8 detik dengan beberapa koneksi paralel ke server Cloudflare terdekat (otomatis pindah ke server Nongki jika gagal).</p>
+              <p>Ping, jitter &amp; packet loss diukur dari 20 permintaan kecil (yang gagal/timeout dihitung hilang), lalu download &amp; upload diukur ±8 detik dengan beberapa koneksi paralel ke server Cloudflare terdekat (otomatis pindah ke server Nongki jika gagal).</p>
               <p className="flex flex-wrap gap-2 pt-1">
                 <span className="rounded-full bg-mint-100 px-2.5 py-1 text-xs font-semibold text-mint-600">Cepat ≥ 30 Mbps</span>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-500">Sedang 10–30</span>
@@ -386,8 +479,8 @@ export function SpeedTest({ places, initialSlug, admin = false }: { places: Plac
                 </select>
               </label>
             )}
-            <button onClick={save} disabled={phase !== "done" || !placeId || saved === "saving" || saved === "ok"} className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-espresso-600 font-semibold text-white disabled:opacity-40">
-              <Icon name={saved === "ok" ? "check" : "save"} size={18} /> {saved === "saving" ? "Menyimpan…" : saved === "ok" ? "Tersimpan" : "Simpan hasil ke tempat ini"}
+            <button onClick={save} disabled={phase !== "done" || !runs.length || !placeId || saved === "saving" || saved === "ok"} className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-espresso-600 font-semibold text-white disabled:opacity-40">
+              <Icon name={saved === "ok" ? "check" : "save"} size={18} /> {saved === "saving" ? "Menyimpan…" : saved === "ok" ? "Tersimpan" : runs.length > 1 ? `Simpan ${runs.length} hasil ke tempat ini` : "Simpan hasil ke tempat ini"}
             </button>
             {phase !== "done" && <p className="text-xs text-ink-500">Selesaikan tes dulu untuk menyimpan hasil.</p>}
             {phase === "done" && !placeId && <p className="text-xs font-semibold text-amber-500">Pilih tempat tempat kamu sedang berada.</p>}

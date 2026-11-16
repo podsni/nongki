@@ -1,6 +1,6 @@
 import "server-only";
 import { loadDB, mutateDB } from "./db";
-import type { Place, PlaceView, SpeedResult, Wifi } from "./types";
+import type { MenuPrice, Place, PlaceView, SpeedResult, Wifi } from "./types";
 import { CATEGORIES, FACILITIES } from "./types";
 import { slugify, toView, uid } from "./util";
 
@@ -32,6 +32,12 @@ export function normalizeInput(body: Record<string, unknown>): Omit<Place, "id" 
     .filter((w) => str(w.ssid))
     .slice(0, 30)
     .map((w) => ({ id: str(w.id, 40) || uid("w"), ssid: str(w.ssid, 64), password: str(w.password, 128), note: str(w.note, 120) }));
+  const menuIn = Array.isArray(body.menu) ? body.menu : [];
+  const menu: MenuPrice[] = menuIn
+    .map((m) => m as Record<string, unknown>)
+    .map((m) => ({ id: str(m.id, 40) || uid("m"), item: str(m.item, 60), price: numOrNull(typeof m.price === "string" ? m.price.replace(/[^\d]/g, "") : m.price, 0, 10_000_000), note: str(m.note, 80), checkedAt: /^\d{4}-\d{2}-\d{2}$/.test(str(m.checkedAt)) ? str(m.checkedAt) : "" }))
+    .filter((m): m is MenuPrice => !!m.item && m.price != null)
+    .slice(0, 40);
   const hoursIn = Array.isArray(body.hours) ? body.hours : [];
   const hours = hoursIn
     .map((h) => h as Record<string, unknown>)
@@ -66,6 +72,7 @@ export function normalizeInput(body: Record<string, unknown>): Omit<Place, "id" 
     mapsUrl: str(body.mapsUrl, 1000),
     description: str(body.description, 1000),
     wifi,
+    menu,
   };
 }
 
@@ -102,36 +109,57 @@ export async function deletePlace(id: string): Promise<void> {
   });
 }
 
-export async function addSpeed(input: Record<string, unknown>, by: SpeedResult["by"] = "pengunjung"): Promise<SpeedResult> {
+function parseSpeed(input: Record<string, unknown>) {
   const down = numOrNull(input.down, 0, 10000), up = numOrNull(input.up, 0, 10000);
   const ping = numOrNull(input.ping, 0, 10000), jitter = numOrNull(input.jitter, 0, 10000);
+  const loss = numOrNull(input.loss, 0, 100);
   if (down == null || up == null || ping == null) throw new Error("Hasil tes tidak valid");
-  const placeId = str(input.placeId, 60);
+  // waktu tes dari browser (untuk sesi multi-tes); hanya diterima jika masuk akal (<= 3 jam lalu)
+  const at = typeof input.at === "string" ? Date.parse(input.at) : NaN;
+  const now = Date.now();
+  const createdAt = new Date(isFinite(at) && at <= now + 60_000 && at >= now - 3 * 3600_000 ? Math.min(at, now) : now).toISOString();
+  return { down, up, ping, jitter, loss, createdAt };
+}
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Simpan satu atau beberapa hasil tes (satu sesi) ke satu tempat. */
+export async function addSpeeds(placeIdIn: unknown, wifiIdIn: unknown, items: Record<string, unknown>[], server: unknown, by: SpeedResult["by"] = "pengunjung"): Promise<SpeedResult[]> {
+  if (!items.length || items.length > 10) throw new Error("Jumlah hasil tes tidak valid (1–10)");
+  const parsed = items.map(parseSpeed);
+  const placeId = str(placeIdIn, 60);
   return mutateDB((db) => {
     const place = db.places.find((p) => p.id === placeId);
     if (!place) throw new Error("Tempat tidak ditemukan");
-    const wifiId = str(input.wifiId, 40);
-    const r: SpeedResult = {
+    const wifiId = str(wifiIdIn, 40);
+    const out: SpeedResult[] = parsed.map((x) => ({
       id: uid("s"),
       placeId,
       wifiId: place.wifi.some((w) => w.id === wifiId) ? wifiId : null,
-      down: Math.round(down * 10) / 10,
-      up: Math.round(up * 10) / 10,
-      ping: Math.round(ping),
-      jitter: Math.round((jitter ?? 0) * 10) / 10,
-      server: str(input.server, 40) || "Cloudflare",
+      down: r1(x.down),
+      up: r1(x.up),
+      ping: r1(x.ping),
+      jitter: r1(x.jitter ?? 0),
+      loss: x.loss == null ? null : r1(x.loss),
+      server: str(server, 40) || "Cloudflare",
       by,
-      createdAt: new Date().toISOString(),
-    };
-    db.speeds.push(r);
-    // keep at most 200 results per place
+      createdAt: x.createdAt,
+    }));
+    db.speeds.push(...out);
+    // simpan maksimal 300 hasil per tempat
     const mine = db.speeds.filter((s) => s.placeId === placeId);
-    if (mine.length > 200) {
-      const drop = new Set(mine.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, mine.length - 200).map((s) => s.id));
+    if (mine.length > 300) {
+      const drop = new Set(mine.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(0, mine.length - 300).map((s) => s.id));
       db.speeds = db.speeds.filter((s) => !drop.has(s.id));
     }
-    return r;
+    return out;
   });
+}
+
+/** Body: { placeId, wifiId?, server?, results: [{down,up,ping,jitter,loss,at}] } atau satu hasil langsung. */
+export function addSpeedsFromBody(body: Record<string, unknown>, by: SpeedResult["by"]) {
+  const items = Array.isArray(body.results) ? (body.results as Record<string, unknown>[]) : [body];
+  return addSpeeds(body.placeId, body.wifiId, items, body.server, by);
 }
 
 export async function deleteSpeed(id: string) {

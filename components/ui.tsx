@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { PlaceView, SpeedLevel } from "@/lib/types";
 import { PRICE_LABEL } from "@/lib/types";
-import { fmtMbps, photoSize } from "@/lib/util";
+import { fmtMbps, fmtRp, photoSize } from "@/lib/util";
 import { Icon } from "./Icon";
 
 const GRADS = [
@@ -98,7 +98,13 @@ export function PlaceCard({ place }: { place: PlaceView }) {
           )}
         </div>
         <div className="flex items-center justify-between gap-2 text-xs">
-          <span className="font-semibold text-caramel-500">{priceLabel(place) || " "}</span>
+          {place.americano ? (
+            <span className="inline-flex items-center gap-1 font-semibold text-espresso-600" title="Harga Americano">
+              <Icon name="coffee" size={13} /> Americano {fmtRp(place.americano.price, true)}
+            </span>
+          ) : (
+            <span className="font-semibold text-caramel-500">{priceLabel(place) || " "}</span>
+          )}
           {place.is24h ? <span className="text-mint-600">Buka 24 jam</span> : <span className="text-ink-500">{place.wifi.length} WiFi</span>}
         </div>
       </div>
@@ -125,6 +131,7 @@ export function PlaceRow({ place, extra }: { place: PlaceView; extra?: React.Rea
         </p>
         <div className="flex flex-wrap items-center gap-1.5">
           <WifiBadge level={place.level} mbps={place.avgDown} />
+          {place.americano && <Tag>☕ Americano {fmtRp(place.americano.price, true)}</Tag>}
           {place.is24h && <Tag>Buka 24 jam</Tag>}
           {place.wifi.length > 0 && <Tag>{place.wifi.length} WiFi</Tag>}
         </div>

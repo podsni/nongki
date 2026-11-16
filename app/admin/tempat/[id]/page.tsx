@@ -41,7 +41,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           <div key={s.id} className="flex items-center gap-3 border-t border-line pt-2 text-sm first-of-type:border-0">
             <WifiBadge level={levelOf(s.down)} mbps={s.down} />
             {s.by === "admin" && <span className="rounded-full bg-espresso-600/10 px-2 py-0.5 text-[11px] font-semibold text-espresso-600">Admin</span>}
-            <span className="min-w-0 truncate text-ink-500">↑ {fmtMbps(s.up)} · {s.ping} ms · {place.wifi.find((w) => w.id === s.wifiId)?.ssid ?? "—"} · {timeAgo(s.createdAt)}</span>
+            <span className="min-w-0 truncate text-ink-500">↑ {fmtMbps(s.up)} · {fmtMbps(s.ping)} ms{s.loss != null ? ` · loss ${fmtMbps(s.loss)}%` : ""} · {place.wifi.find((w) => w.id === s.wifiId)?.ssid ?? "—"} · {timeAgo(s.createdAt)}</span>
             <span className="ml-auto"><DeleteSpeedButton id={s.id} /></span>
           </div>
         ))}

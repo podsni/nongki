@@ -1,10 +1,11 @@
 # ☕ Nongki — Rekomendasi tempat ngopi & nongkrong + cek WiFi
 
-Nongki adalah web app untuk mencari tempat ngopi/nongkrong (fokus Malang) lengkap dengan **galeri foto dari Google Maps**, **daftar WiFi + password**, dan **tes kecepatan internet langsung dari browser** yang hasilnya tersimpan per tempat.
+Nongki adalah web app untuk mencari tempat ngopi/nongkrong (fokus Malang) lengkap dengan **galeri foto dari Google Maps**, **harga Americano**, **daftar WiFi + password**, dan **tes kecepatan internet langsung dari browser** yang hasilnya tersimpan per tempat dan diringkas menjadi panel **WiFi details** (rentang kecepatan, jitter, packet loss, variabilitas, sesi tes).
 
 - 🌐 Produksi: **https://nongki-malang.vercel.app**
 - 🔐 Admin: **https://nongki-malang.vercel.app/admin**
 - 🎨 Desain Figma: https://www.figma.com/design/yb6hbJMBb4KYaQDQLsAGiD
+- 📦 Repo (publik): https://github.com/podsni/nongki
 
 > _English summary: Nongki is a Next.js app for discovering coffee shops. Admins add a place by pasting a Google Maps link (name, address, rating, hours, photos are scraped automatically), manage multiple WiFi networks per place, and run in-browser speed tests whose results drive a Fast/Medium/Slow badge. Data is stored as a JSON document in a private Vercel Blob store._
 
@@ -33,19 +34,40 @@ Nongki adalah web app untuk mencari tempat ngopi/nongkrong (fokus Malang) lengka
 | Halaman | Isi |
 |---|---|
 | **Beranda** (`/`) | Pencarian, kategori (Kopi, WFC, Nongkrong, 24 Jam, Murah), rekomendasi, "WiFi paling kencang", "Buka 24 jam". |
-| **Jelajah** (`/jelajah`) | Cari, filter kategori / WiFi ≥ 30 Mbps / ada colokan, urutkan (rating, kecepatan internet, buka 24 jam, harga termurah, jarak), tampilan **List** atau **Peta** (Leaflet + OpenStreetMap, tombol lokasi saya). State filter tersimpan di URL. |
-| **Detail tempat** (`/tempat/[slug]`) | Galeri foto (carousel geser di HP, grid 1+4 di desktop, lightbox dengan swipe & keyboard), status **buka/tutup sekarang**, alamat, jam buka (hari ini disorot), harga, telepon, tombol **Rute** (Google Maps) & **Bagikan** (Web Share API, fallback salin link), fasilitas, ringkasan internet, **semua WiFi** (salin SSID, tampil/sembunyi & salin password), riwayat speed test. |
-| **Cek Speed** (`/cek-speed`) | Tes ping, jitter, download, upload dengan gauge; hasil bisa disimpan ke tempat + WiFi yang dipakai. |
+| **Jelajah** (`/jelajah`) | Cari, filter kategori / WiFi ≥ 30 Mbps / ada colokan / Americano ≤ Rp20rb, urutkan (rating, kecepatan internet, buka 24 jam, **Americano termurah**, harga termurah, jarak), tampilan **List** atau **Peta** (Leaflet + OpenStreetMap, tombol lokasi saya). State filter tersimpan di URL. |
+| **Detail tempat** (`/tempat/[slug]`) | Galeri foto (carousel geser di HP, grid 1+4 di desktop, lightbox dengan swipe & keyboard), status **buka/tutup sekarang**, alamat, jam buka (hari ini disorot), harga, **harga Americano** (+ ukuran & tanggal terakhir dicek) dan harga menu lain, telepon, tombol **Rute** (Google Maps) & **Bagikan** (Web Share API, fallback salin link), fasilitas, ringkasan internet, panel **WiFi details** per tempat, **semua WiFi** (salin SSID, tampil/sembunyi & salin password, **WiFi details per jaringan**), riwayat speed test. |
+| **Cek Speed** (`/cek-speed`) | Tes ping, jitter, packet loss, download, upload dengan gauge; hasil bisa disimpan ke tempat + WiFi yang dipakai. |
 
 Badge kecepatan (rata-rata 5 tes terakhir): **Cepat ≥ 30 Mbps**, **Sedang 10–30 Mbps**, **Lambat < 10 Mbps**.
+
+### Panel WiFi details
+Dihitung otomatis dari hasil tes yang tersimpan — per jaringan WiFi dan gabungan per tempat (`lib/wifistats.ts`). Contoh tampilan:
+
+```
+WIFI DETAILS
+Rentang download   29,8–91,8 Mbps      Rentang upload  30,7–54,9 Mbps
+Rentang ping       30,9–37,5 ms        Jitter · loss   4,5 ms · 1,7%
+Variabilitas       sedang              Jumlah tes      5 dalam 1 sesi
+Tes terakhir       2026-10-20 13:53–13:55 WIB
+```
+_(angka di atas hanya contoh format)_
+
+| Baris | Cara hitung |
+|---|---|
+| Rentang download / upload / ping | nilai minimum–maksimum dari semua tes |
+| Jitter · loss | rata-rata jitter (ms) · rata-rata packet loss (%) |
+| Variabilitas | koefisien variasi (simpangan baku ÷ rata-rata) download: **rendah** < 0,15 ≤ **sedang** < 0,35 ≤ **tinggi**; butuh ≥ 2 tes |
+| Jumlah tes | `N dalam M sesi`; tes yang berjarak ≤ 30 menit dari tes sebelumnya = satu sesi |
+| Tes terakhir | rentang waktu sesi terakhir dalam WIB (Asia/Jakarta) |
 
 ### Untuk admin (`/admin`)
 - Login dengan password (`ADMIN_PASSWORD`), sesi berupa cookie **httpOnly** bertanda tangan HMAC (7 hari), percobaan login dibatasi 8×/10 menit per IP.
 - **Tambah tempat cukup dengan link Google Maps** (link pendek `maps.app.goo.gl/…` atau link penuh) → data terisi otomatis → admin bisa melengkapi sebelum simpan.
 - **Galeri**: semua foto yang bisa diambil dari Maps (biasanya 20–40+), duplikat dibuang otomatis. Admin bisa menghapus foto, memilih sampul, menambah URL foto sendiri, atau **"Ambil ulang dari Maps"**.
 - **Banyak WiFi per tempat** (SSID, password, catatan/lokasi mis. "lantai 2").
+- **Harga Americano** (Rp, ukuran/catatan, tanggal terakhir dicek) + **harga menu lain** opsional.
 - Kategori, fasilitas, jam buka, harga, koordinat, dll.
-- **Tes kecepatan langsung dari halaman admin** per tempat; hasil diberi label _"Diukur admin di lokasi"_, langsung masuk riwayat & memengaruhi badge.
+- **Tes kecepatan langsung dari halaman admin** per tempat, bisa **sesi multi-tes (1×/3×/5×)**; semua hasil sesi disimpan sekaligus dengan label _"Diukur admin di lokasi"_, langsung masuk riwayat, panel WiFi details & badge.
 - Hapus tempat dan hapus hasil tes yang keliru.
 
 ---
@@ -88,8 +110,8 @@ Browser ──► Next.js (Vercel Functions)
   ```ts
   { version: 2, places: Place[], speeds: SpeedResult[] }
   ```
-  - `Place`: nama, slug, alamat, area, lat/lng, rating, ulasan, harga, jam buka, kategori, fasilitas, `photos[]` (galeri; `photoUrl` = sampul), `wifi[]` ({ id, ssid, password, note }), link Maps.
-  - `SpeedResult`: placeId, wifiId (opsional), down/up (Mbps), ping/jitter (ms), server, `by` (`admin` | `pengunjung`), waktu.
+  - `Place`: nama, slug, alamat, area, lat/lng, rating, ulasan, harga, jam buka, kategori, fasilitas, `photos[]` (galeri; `photoUrl` = sampul), `wifi[]` ({ id, ssid, password, note }), `menu[]` ({ id, item, price, note, checkedAt } — Americano = item yang namanya mengandung "americano"), link Maps.
+  - `SpeedResult`: placeId, wifiId (opsional), down/up (Mbps), ping/jitter (ms), `loss` (%), server, `by` (`admin` | `pengunjung`), waktu tes.
 - Tulis data memakai pola read-modify-write yang diserialkan per instance (`mutateDB`). Cukup untuk trafik kecil; lihat [Keterbatasan](#keterbatasan).
 - Tanpa `BLOB_READ_WRITE_TOKEN`, data disimpan ke `.data/db.json` (otomatis dibuat, di-ignore git).
 - **Tidak ada data contoh/seed**: database baru selalu kosong, isi lewat admin.
@@ -173,11 +195,14 @@ Di kartu **WiFi di tempat ini** klik **Tambah WiFi** sebanyak yang perlu. Isi:
 
 Baris tanpa SSID diabaikan saat simpan. Maksimal 30 WiFi per tempat.
 
+### Harga Americano & menu
+Di kartu **Harga menu**: isi harga Americano (angka saja, otomatis berformat Rp), ukuran/catatan (mis. "12 oz, panas"), dan **Terakhir dicek** (tombol _Hari ini_). Tambah menu lain dengan **Tambah harga menu lain**. Kosongkan harga untuk menghapus. Harga Americano tampil di kartu tempat, halaman detail, dan bisa dipakai untuk urutan **Americano termurah** / filter **Americano ≤ Rp20rb** di Jelajah.
+
 ### Tes kecepatan dari admin
 1. Datang ke lokasi dan sambungkan HP/laptop ke WiFi tempat itu.
 2. Admin → tombol **Tes speed** pada kartu tempat (atau **Tes kecepatan** di halaman edit).
-3. **Mulai tes** (±20 detik). Pilih WiFi yang dipakai pada "Diukur di WiFi mana?".
-4. **Simpan hasil ke tempat ini** → hasil langsung muncul di riwayat (label _Admin_) dan badge tempat diperbarui.
+3. Pilih **Jumlah tes per sesi** (1×, 3×, atau 5×), lalu **Jalankan N tes** (±15–20 detik per tes). Pilih WiFi yang dipakai pada "Diukur di WiFi mana?".
+4. Lihat pratinjau **WiFi details — sesi ini** dan tabel tiap tes, lalu **Simpan N hasil ke tempat ini** → semua hasil masuk riwayat (label _Admin_), panel WiFi details jaringan itu, dan badge tempat.
 5. Hasil yang salah bisa dihapus dari **Riwayat tes kecepatan** (ikon tempat sampah).
 
 > Penting: ukur hanya saat benar-benar tersambung ke WiFi tempat tersebut. Tes dari rumah/kantor/data seluler akan membuat badge menyesatkan.
@@ -190,9 +215,9 @@ Semua berjalan di browser pengunjung (`components/SpeedTest.tsx`):
 
 | Tahap | Metode |
 |---|---|
-| Ping & jitter | 12 request kecil berurutan (1 pemanasan dibuang). Ping = median, jitter = rata-rata selisih antar ping. |
-| Download | 4 koneksi paralel selama ±8 detik, 1,2 detik pertama dibuang (slow-start). |
-| Upload | 3 koneksi paralel `XMLHttpRequest` (progress upload) selama ±7 detik. |
+| Ping, jitter & loss | 20 request kecil berurutan (+1 pemanasan), timeout 1,5 dtk. Ping = median, jitter = rata-rata selisih antar ping, **loss** = % request yang gagal/timeout. |
+| Download | 4 koneksi paralel selama ±8 detik (6 detik di sesi multi-tes), 1,2 detik pertama dibuang (slow-start). |
+| Upload | 3 koneksi paralel `XMLHttpRequest` (progress upload) selama ±7 detik (5 detik di sesi multi-tes). |
 | Server | Cloudflare (server terdekat, CORS terbuka); jika gagal otomatis pindah ke `/api/speed/*` milik Nongki. |
 
 Satu tes memakai sekitar 50–150 MB kuota (tergantung kecepatan).
@@ -207,14 +232,15 @@ Satu tes memakai sekitar 50–150 MB kuota (tergantung kecepatan).
 | `GET /api/speed/ping` | publik | Respons kecil untuk ukur ping. |
 | `GET /api/speed/down?bytes=N` | publik | Stream data acak (maks. 25 MB). |
 | `POST /api/speed/up` | publik | Menerima & menghitung byte upload, balas `{ bytes, ms }`. |
-| `POST /api/speed/results` | publik (6×/10 mnt/IP) | Simpan hasil tes pengunjung `{ placeId, wifiId?, down, up, ping, jitter, server }`. |
+| `POST /api/speed/results` | publik (6×/10 mnt/IP) | Simpan 1 hasil tes pengunjung `{ placeId, wifiId?, server, results: [{ down, up, ping, jitter, loss, at }] }`. |
 | `POST /api/admin/login` | — | `{ password }` → set cookie sesi. |
 | `POST /api/admin/logout` | admin | Hapus cookie. |
 | `POST /api/admin/import` | admin | `{ url }` → draft data dari Google Maps (termasuk `photos[]`, `extracted[]`, `warnings[]`). |
 | `POST /api/admin/places` | admin | Buat tempat. |
 | `PUT /api/admin/places/:id` | admin | Ubah tempat (termasuk `wifi[]`, `photos[]`). |
 | `DELETE /api/admin/places/:id` | admin | Hapus tempat + riwayat tesnya. |
-| `POST /api/admin/speeds` | admin | Simpan hasil tes admin (label "Diukur admin"). |
+| `GET /api/admin/places/:id` | admin | Data lengkap satu tempat + semua hasil tes. |
+| `POST /api/admin/speeds` | admin | Simpan 1–10 hasil tes satu sesi (format sama dengan di atas; label "Diukur admin"). |
 | `DELETE /api/admin/speeds/:id` | admin | Hapus satu hasil tes. |
 
 Contoh:
@@ -239,7 +265,8 @@ app/
   api/                     Route handlers (lihat tabel API)
 components/
   Gallery.tsx              Hero galeri, grid, lightbox (swipe/keyboard)
-  SpeedTest.tsx            Tes kecepatan (mode publik & admin)
+  SpeedTest.tsx            Tes kecepatan (mode publik & admin, sesi multi-tes)
+  WifiDetails.tsx          Panel statistik WiFi details
   Explorer.tsx, MapView.tsx  Jelajah + peta Leaflet
   PlaceClient.tsx          Bagikan, daftar WiFi (salin/tampil password)
   admin/                   LoginForm, ImportFlow, PlaceForm (WiFi & foto editor)
@@ -248,7 +275,8 @@ lib/
   places.ts                CRUD tempat & hasil tes, validasi input
   maps.ts                  Import Google Maps (data + galeri foto)
   auth.ts, guard.ts        Sesi admin (HMAC cookie)
-  util.ts                  Format, level kecepatan, status buka, ukuran foto
+  util.ts                  Format (Mbps, Rp, tanggal), level kecepatan, status buka, ukuran foto
+  wifistats.ts             Statistik WiFi details: rentang, sesi, variabilitas
   types.ts, form.ts        Tipe data & konversi form
 ```
 
@@ -260,6 +288,8 @@ lib/
 - **Foto di-hotlink** dari `googleusercontent.com` (tidak disalin ke storage sendiri). Jika Google menghapus/mengganti foto, gambar bisa hilang → gunakan **Ambil ulang dari Maps**.
 - **Password WiFi tampil publik** di halaman detail (memang tujuan fitur salin password). Jangan simpan password yang tidak boleh diketahui umum.
 - **Penyimpanan satu file JSON** di Blob: dua penulisan yang benar-benar bersamaan dari instance berbeda bisa saling menimpa. Cukup untuk skala kecil; pindah ke Postgres untuk skala besar.
+- **Packet loss adalah estimasi** di level HTTP (request ping yang gagal/timeout), bukan ICMP; browser tidak bisa mengukur loss paket mentah.
+- **Harga menu diisi manual** oleh admin (Google Maps tidak menyediakan harga per menu); tanggal _terakhir dicek_ membantu menilai kebaruannya.
 - **Hasil tes pengunjung tidak diverifikasi** (hanya dibatasi per IP). Admin dapat menghapus hasil yang janggal; hasil admin diberi label.
 - Akurasi tes bergantung pada browser & perangkat; fallback server Nongki (Vercel) kurang akurat dibanding Cloudflare.
 - Tile peta OpenStreetMap tunduk pada kebijakan fair-use OSM.

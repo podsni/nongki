@@ -7,7 +7,9 @@ import { GalleryGrid, GalleryHero } from "@/components/Gallery";
 import { gradFor, priceLabel, Rating, Tag, WifiBadge } from "@/components/ui";
 import { getPlace } from "@/lib/places";
 import { FACILITIES } from "@/lib/types";
-import { fmtMbps, levelOf, mapsRouteUrl, openStatus, timeAgo } from "@/lib/util";
+import { fmtDate, fmtMbps, fmtRp, levelOf, mapsRouteUrl, openStatus, timeAgo } from "@/lib/util";
+import { computeStats } from "@/lib/wifistats";
+import { WifiDetails } from "@/components/WifiDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,9 @@ export default async function Detail({ params }: Props) {
   const facs = FACILITIES.filter((f) => p.facilities.includes(f.key));
   const wifiName = (id: string | null) => p.wifi.find((w) => w.id === id)?.ssid;
   const status = openStatus(p);
+  const placeStats = computeStats(speeds);
+  const wifiStats = Object.fromEntries(p.wifi.map((w) => [w.id, computeStats(speeds.filter((s) => s.wifiId === w.id))]));
+  const otherMenu = p.menu.filter((m) => m.id !== p.americano?.id);
   const today = new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(new Date());
 
   const info = (
@@ -53,6 +58,32 @@ export default async function Detail({ params }: Props) {
       <Row icon="coins" label="Kisaran harga">
         {[priceLabel(p), p.priceText && p.priceLevel ? p.priceText : ""].filter(Boolean).join(" • ") || "—"}
       </Row>
+      <Row icon="coffee" label="Harga Americano">
+        {p.americano ? (
+          <span>
+            <b className="text-espresso-600">{fmtRp(p.americano.price)}</b>
+            {p.americano.note && <span className="text-ink-500"> · {p.americano.note}</span>}
+            {p.americano.checkedAt && <span className="block text-xs font-normal text-ink-500">Terakhir dicek {fmtDate(p.americano.checkedAt)}</span>}
+          </span>
+        ) : (
+          <span className="text-ink-500">Belum ada data</span>
+        )}
+      </Row>
+      {otherMenu.length > 0 && (
+        <Row icon="list" label="Harga menu lain">
+          <ul className="space-y-0.5">
+            {otherMenu.map((m) => (
+              <li key={m.id} className="flex justify-between gap-4">
+                <span>
+                  {m.item}
+                  {m.note && <span className="text-ink-500"> · {m.note}</span>}
+                </span>
+                <span className="shrink-0 font-semibold">{fmtRp(m.price)}</span>
+              </li>
+            ))}
+          </ul>
+        </Row>
+      )}
       {p.phone && (
         <Row icon="phone" label="Telepon">
           <a href={`tel:${p.phone}`} className="text-espresso-600">
@@ -150,12 +181,14 @@ export default async function Detail({ params }: Props) {
             </div>
           </section>
 
+          {placeStats && <WifiDetails stats={placeStats} title="WiFi details" subtitle={p.wifi.length > 1 ? "Gabungan semua jaringan di tempat ini" : "Dari semua tes di tempat ini"} />}
+
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold">WiFi di tempat ini</h2>
               <span className="text-xs text-ink-500">{p.wifi.length} jaringan</span>
             </div>
-            <WifiList wifi={p.wifi} />
+            <WifiList wifi={p.wifi} stats={wifiStats} />
           </section>
 
           <section className="space-y-3">
@@ -176,7 +209,7 @@ export default async function Detail({ params }: Props) {
                           ↓ {fmtMbps(s.down)} ↑ {fmtMbps(s.up)} Mbps
                         </p>
                         <p className="truncate text-xs text-ink-500">
-                          Ping {s.ping} ms • jitter {fmtMbps(s.jitter)} ms • {timeAgo(s.createdAt)}
+                          Ping {fmtMbps(s.ping)} ms • jitter {fmtMbps(s.jitter)} ms{s.loss != null ? ` • loss ${fmtMbps(s.loss)}%` : ""} • {timeAgo(s.createdAt)}
                           {wifiName(s.wifiId) ? ` • ${wifiName(s.wifiId)}` : ""}
                         </p>
                         {s.by === "admin" && (

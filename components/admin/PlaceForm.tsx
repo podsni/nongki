@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CATEGORIES, FACILITIES, PRICE_LABEL } from "@/lib/types";
 import type { Wifi } from "@/lib/types";
-import { DAYS, type FormValues } from "@/lib/form";
+import { DAYS, joinMenu, type FormValues, type MenuRow } from "@/lib/form";
 export { toForm, type FormValues } from "@/lib/form";
 import { photoSize } from "@/lib/util";
 import { Icon } from "../Icon";
@@ -151,6 +151,77 @@ function PhotoEditor({ photos, mapsUrl, onChange }: { photos: string[]; mapsUrl:
   );
 }
 
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+const rupiah = (raw: string) => {
+  const d = raw.replace(/[^\d]/g, "");
+  return d ? Number(d).toLocaleString("id-ID") : "";
+};
+
+function PriceInput({ value, onChange, name, label }: { value: string; onChange: (v: string) => void; name: string; label: string }) {
+  return (
+    <div className="flex h-11 items-center rounded-[12px] border border-line bg-white focus-within:border-espresso-600">
+      <span className="pl-3 text-sm font-semibold text-ink-500">Rp</span>
+      <input className="h-full w-full bg-transparent px-2 text-sm outline-none" inputMode="numeric" value={rupiah(value)} onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))} placeholder="18.000" name={name} aria-label={label} />
+    </div>
+  );
+}
+
+function MenuEditor({ americano, menu, onAmericano, onMenu }: { americano: MenuRow; menu: MenuRow[]; onAmericano: (a: MenuRow) => void; onMenu: (m: MenuRow[]) => void }) {
+  const setRow = (i: number, patch: Partial<MenuRow>) => onMenu(menu.map((m, j) => (j === i ? { ...m, ...patch } : m)));
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3 rounded-[14px] border border-caramel-500/40 bg-cream-50 p-3">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-espresso-600">
+          <Icon name="coffee" size={16} /> Americano
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Harga">
+            <PriceInput value={americano.price} onChange={(price) => onAmericano({ ...americano, price, checkedAt: americano.checkedAt || (price ? today() : "") })} name="americano-price" label="Harga Americano" />
+          </Field>
+          <Field label="Ukuran / catatan">
+            <input className={inputCls} value={americano.note} onChange={(e) => onAmericano({ ...americano, note: e.target.value })} placeholder="mis. 12 oz, panas" name="americano-note" />
+          </Field>
+          <Field label="Terakhir dicek">
+            <div className="flex gap-2">
+              <input type="date" className={inputCls} value={americano.checkedAt} onChange={(e) => onAmericano({ ...americano, checkedAt: e.target.value })} name="americano-checked" />
+              <button type="button" onClick={() => onAmericano({ ...americano, checkedAt: today() })} className="h-11 shrink-0 rounded-[12px] border border-line px-3 text-xs font-semibold">
+                Hari ini
+              </button>
+            </div>
+          </Field>
+        </div>
+        {americano.price && (
+          <button type="button" onClick={() => onAmericano({ ...americano, price: "", note: "", checkedAt: "" })} className="text-xs font-semibold text-slow-600">
+            Hapus harga Americano
+          </button>
+        )}
+      </div>
+      {menu.map((m, i) => (
+        <div key={m.id || i} className="grid gap-2 rounded-[14px] border border-line p-3 sm:grid-cols-[1.2fr_1fr_1fr_1fr_auto] sm:items-end">
+          <Field label="Menu">
+            <input className={inputCls} value={m.item} onChange={(e) => setRow(i, { item: e.target.value })} placeholder="mis. Kopi susu gula aren" />
+          </Field>
+          <Field label="Harga">
+            <PriceInput value={m.price} onChange={(price) => setRow(i, { price })} name={`menu-price-${i}`} label={`Harga ${m.item || "menu"}`} />
+          </Field>
+          <Field label="Catatan">
+            <input className={inputCls} value={m.note} onChange={(e) => setRow(i, { note: e.target.value })} placeholder="ukuran / varian" />
+          </Field>
+          <Field label="Dicek">
+            <input type="date" className={inputCls} value={m.checkedAt} onChange={(e) => setRow(i, { checkedAt: e.target.value })} />
+          </Field>
+          <button type="button" onClick={() => onMenu(menu.filter((_, j) => j !== i))} className="inline-flex h-11 items-center justify-center gap-1 rounded-[12px] px-3 text-xs font-semibold text-slow-600 hover:bg-slow-100" aria-label="Hapus menu">
+            <Icon name="trash" size={14} /> Hapus
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => onMenu([...menu, { id: "", item: "", price: "", note: "", checkedAt: today() }])} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-espresso-400 text-sm font-semibold text-espresso-600 hover:bg-cream-100">
+        <Icon name="plus" size={16} /> Tambah harga menu lain
+      </button>
+    </div>
+  );
+}
+
 export function PlaceForm({ initial, placeId, extracted }: { initial: FormValues; placeId?: string; extracted?: string[] }) {
   const router = useRouter();
   const [v, setV] = useState<FormValues>(initial);
@@ -167,7 +238,7 @@ export function PlaceForm({ initial, placeId, extracted }: { initial: FormValues
     setBusy(true);
     setErr("");
     setOk("");
-    const body = { ...v, hours: v.is24h ? DAYS.map((d) => ({ day: d, text: "Buka 24 jam" })) : v.hours.filter((h) => h.text.trim()), wifi: v.wifi.filter((w) => w.ssid.trim()) };
+    const body = { ...v, hours: v.is24h ? DAYS.map((d) => ({ day: d, text: "Buka 24 jam" })) : v.hours.filter((h) => h.text.trim()), wifi: v.wifi.filter((w) => w.ssid.trim()), menu: joinMenu(v) };
     const res = await fetch(placeId ? `/api/admin/places/${placeId}` : "/api/admin/places", { method: placeId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await res.json().catch(() => ({ error: "Respons tidak valid" }));
     setBusy(false);
@@ -233,6 +304,10 @@ export function PlaceForm({ initial, placeId, extracted }: { initial: FormValues
 
       <Card title="Foto & galeri" right={<span className="text-xs text-ink-500">{v.photos.length} foto</span>}>
         <PhotoEditor photos={v.photos} mapsUrl={v.mapsUrl} onChange={(ph) => set("photos", ph)} />
+      </Card>
+
+      <Card title="Harga menu" right={<span className="text-xs text-ink-500">opsional</span>}>
+        <MenuEditor americano={v.americano} menu={v.menu} onAmericano={(a) => set("americano", a)} onMenu={(m) => set("menu", m)} />
       </Card>
 
       <Card title="WiFi di tempat ini" right={<span className="text-xs text-ink-500">{v.wifi.length} jaringan</span>}>

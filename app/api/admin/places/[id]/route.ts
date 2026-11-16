@@ -1,7 +1,15 @@
 import { errorJson, requireAdmin } from "@/lib/guard";
-import { deletePlace, updatePlace } from "@/lib/places";
+import { deletePlace, getPlace, updatePlace } from "@/lib/places";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const deny = await requireAdmin();
+  if (deny) return deny;
+  const r = await getPlace((await ctx.params).id);
+  if (!r) return Response.json({ ok: false, error: "Tempat tidak ditemukan" }, { status: 404 });
+  return Response.json({ ok: true, place: r.place, speeds: r.speeds });
+}
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const deny = await requireAdmin();

@@ -1,5 +1,5 @@
 import { errorJson, requireAdmin } from "@/lib/guard";
-import { addSpeed } from "@/lib/places";
+import { addSpeedsFromBody } from "@/lib/places";
 
 export const dynamic = "force-dynamic";
 
@@ -8,8 +8,8 @@ export async function POST(req: Request) {
   const deny = await requireAdmin();
   if (deny) return deny;
   try {
-    const r = await addSpeed((await req.json()) as Record<string, unknown>, "admin");
-    return Response.json({ ok: true, result: r });
+    const results = await addSpeedsFromBody((await req.json()) as Record<string, unknown>, "admin");
+    return Response.json({ ok: true, results, result: results[0] });
   } catch (e) {
     return errorJson(e);
   }

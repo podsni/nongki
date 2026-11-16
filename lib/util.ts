@@ -1,4 +1,4 @@
-import type { Place, PlaceView, SpeedLevel, SpeedResult } from "./types";
+import type { MenuPrice, Place, PlaceView, SpeedLevel, SpeedResult } from "./types";
 
 export function uid(prefix = ""): string {
   const a = crypto.getRandomValues(new Uint8Array(9));
@@ -34,7 +34,7 @@ export function toView(p: Place, speeds: SpeedResult[]): PlaceView {
   const last = mine.slice(0, 5);
   const avg = (k: "down" | "up" | "ping") => (last.length ? last.reduce((a, s) => a + s[k], 0) / last.length : null);
   const avgDown = avg("down");
-  return { ...p, avgDown, avgUp: avg("up"), avgPing: avg("ping"), speedCount: mine.length, level: levelOf(avgDown) };
+  return { ...p, avgDown, avgUp: avg("up"), avgPing: avg("ping"), speedCount: mine.length, level: levelOf(avgDown), americano: americanoOf(p) };
 }
 
 export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -87,4 +87,22 @@ export function openStatus(p: { is24h: boolean; hours: { day: string; text: stri
   const next = ranges(today.text).find(([a]) => a > mins);
   if (next) return { open: false, label: `Tutup · buka ${String(Math.floor(next[0] / 60)).padStart(2, "0")}.${String(next[0] % 60).padStart(2, "0")}` };
   return { open: false, label: /tutup/i.test(today.text) ? "Tutup hari ini" : "Tutup sekarang" };
+}
+
+export function americanoOf(p: Pick<Place, "menu">): MenuPrice | null {
+  return (p.menu || []).find((m) => /americano/i.test(m.item)) ?? null;
+}
+
+/** Rp 18.000 → "Rp18.000"; ringkas: "Rp18rb". */
+export function fmtRp(n: number | null | undefined, short = false): string {
+  if (n == null || !isFinite(n)) return "—";
+  if (short && n >= 1000 && n % 1000 === 0) return `Rp${n / 1000}rb`;
+  if (short && n >= 1000) return `Rp${(n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })}rb`;
+  return "Rp" + n.toLocaleString("id-ID");
+}
+
+/** "2026-11-16" → "16 Nov 2026" */
+export function fmtDate(d: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  return new Date(d + "T12:00:00+07:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 }

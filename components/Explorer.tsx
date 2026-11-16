@@ -9,11 +9,12 @@ import { PlaceRow } from "./ui";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="grid h-full place-items-center text-sm text-ink-500">Memuat peta…</div> });
 
-type Sort = "rating" | "wifi" | "24jam" | "harga" | "jarak";
+type Sort = "rating" | "wifi" | "24jam" | "americano" | "harga" | "jarak";
 const SORTS: { key: Sort; label: string }[] = [
   { key: "rating", label: "Rating" },
   { key: "wifi", label: "Kecepatan internet" },
   { key: "24jam", label: "Buka 24 jam" },
+  { key: "americano", label: "Americano termurah" },
   { key: "harga", label: "Harga termurah" },
   { key: "jarak", label: "Jarak" },
 ];
@@ -23,6 +24,7 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
   const [cats, setCats] = useState<string[]>(initial.cat ? [initial.cat] : []);
   const [fastOnly, setFastOnly] = useState(false);
   const [plugOnly, setPlugOnly] = useState(false);
+  const [amerMax, setAmerMax] = useState(false); // Americano ≤ Rp20rb
   const [sort, setSort] = useState<Sort>((SORTS.find((s) => s.key === initial.sort)?.key ?? "rating") as Sort);
   const [view, setView] = useState<"list" | "peta">(initial.view);
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
@@ -63,6 +65,7 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
       if (cats.length && !cats.every((c) => (c === "24jam" ? p.is24h : c === "murah" ? p.priceLevel === 1 || p.categories.includes("murah") : p.categories.includes(c)))) return false;
       if (fastOnly && !((p.avgDown ?? 0) >= 30)) return false;
       if (plugOnly && !p.facilities.includes("colokan")) return false;
+      if (amerMax && !(p.americano && p.americano.price <= 20000)) return false;
       return true;
     });
     const dist = (p: PlaceView) => (me && p.lat != null && p.lng != null ? haversineKm(me, { lat: p.lat, lng: p.lng }) : Infinity);
@@ -72,8 +75,10 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
           return (b.avgDown ?? -1) - (a.avgDown ?? -1);
         case "24jam":
           return Number(b.is24h) - Number(a.is24h) || (b.rating ?? 0) - (a.rating ?? 0);
+        case "americano":
+          return (a.americano?.price ?? Infinity) - (b.americano?.price ?? Infinity) || (b.rating ?? 0) - (a.rating ?? 0);
         case "harga":
-          return (a.priceLevel ?? 9) - (b.priceLevel ?? 9) || (b.rating ?? 0) - (a.rating ?? 0);
+          return (a.americano?.price ?? Infinity) - (b.americano?.price ?? Infinity) || (a.priceLevel ?? 9) - (b.priceLevel ?? 9) || (b.rating ?? 0) - (a.rating ?? 0);
         case "jarak":
           return dist(a) - dist(b);
         default:
@@ -81,7 +86,7 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
       }
     });
     return out.map((p) => ({ p, km: dist(p) }));
-  }, [places, q, cats, fastOnly, plugOnly, sort, me]);
+  }, [places, q, cats, fastOnly, plugOnly, amerMax, sort, me]);
 
   const toggleCat = (k: string) => setCats((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
   const chip = (on: boolean) => `shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition ${on ? "border-espresso-600 bg-espresso-600 text-white" : "border-line bg-white text-ink-900 hover:border-caramel-500"}`;
@@ -98,7 +103,7 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
         )}
       </label>
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
-        <button className={chip(!cats.length && !fastOnly && !plugOnly)} onClick={() => { setCats([]); setFastOnly(false); setPlugOnly(false); }}>
+        <button className={chip(!cats.length && !fastOnly && !plugOnly && !amerMax)} onClick={() => { setCats([]); setFastOnly(false); setPlugOnly(false); setAmerMax(false); }}>
           Semua
         </button>
         {CATEGORIES.map((c) => (
@@ -111,6 +116,9 @@ export function Explorer({ places, initial }: { places: PlaceView[]; initial: { 
         </button>
         <button className={chip(plugOnly)} onClick={() => setPlugOnly((v) => !v)}>
           Ada colokan
+        </button>
+        <button className={chip(amerMax)} onClick={() => setAmerMax((v) => !v)}>
+          Americano ≤ Rp20rb
         </button>
       </div>
       <div className="space-y-2">

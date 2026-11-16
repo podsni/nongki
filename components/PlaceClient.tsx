@@ -2,6 +2,9 @@
 import { useState } from "react";
 import type { Wifi } from "@/lib/types";
 import { Icon } from "./Icon";
+import { fmtMbps } from "@/lib/util";
+import type { WifiStats } from "@/lib/wifistats";
+import { WifiDetails } from "./WifiDetails";
 
 async function copyText(t: string) {
   try {
@@ -58,8 +61,9 @@ export function ShareButton({ title, text, className = "" }: { title: string; te
   );
 }
 
-function WifiItem({ w, onCopy }: { w: Wifi; onCopy: (m: string) => void }) {
+function WifiItem({ w, onCopy, stats }: { w: Wifi; onCopy: (m: string) => void; stats?: WifiStats | null }) {
   const [show, setShow] = useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <div className="space-y-3 rounded-[18px] border border-line bg-white p-4">
       <div className="flex items-center gap-3">
@@ -90,17 +94,35 @@ function WifiItem({ w, onCopy }: { w: Wifi; onCopy: (m: string) => void }) {
       ) : (
         <p className="rounded-[10px] bg-mint-100 px-3 py-2 text-xs font-semibold text-mint-600">WiFi terbuka — tanpa password</p>
       )}
+      {stats ? (
+        <div>
+          <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 rounded-[10px] border border-line px-3 py-2 text-left text-xs font-semibold text-ink-900 hover:border-caramel-500">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Icon name="activity" size={14} className="shrink-0 text-mint-600" />
+              <span className="truncate">
+                ↓ {fmtMbps(stats.down[0])}–{fmtMbps(stats.down[1])} Mbps · {stats.tests} tes
+              </span>
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1 text-espresso-600">
+              {open ? "Tutup" : "Detail WiFi"} <Icon name="chevdown" size={14} className={open ? "rotate-180" : ""} />
+            </span>
+          </button>
+          {open && <WifiDetails stats={stats} className="mt-2 border-dashed" subtitle={`Dari ${stats.tests} tes untuk ${w.ssid}`} />}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-500">Belum ada tes kecepatan untuk jaringan ini.</p>
+      )}
     </div>
   );
 }
 
-export function WifiList({ wifi }: { wifi: Wifi[] }) {
+export function WifiList({ wifi, stats = {} }: { wifi: Wifi[]; stats?: Record<string, WifiStats | null> }) {
   const toast = useToast();
   if (!wifi.length) return <p className="rounded-[18px] border border-dashed border-line p-4 text-sm text-ink-500">Belum ada data WiFi untuk tempat ini.</p>;
   return (
     <div className="space-y-3">
       {wifi.map((w) => (
-        <WifiItem key={w.id} w={w} onCopy={toast.show} />
+        <WifiItem key={w.id} w={w} onCopy={toast.show} stats={stats[w.id]} />
       ))}
       {toast.node}
     </div>

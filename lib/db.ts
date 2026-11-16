@@ -22,9 +22,9 @@ function normalize(db: DB): DB {
     const raw = p as Place & { isExample?: boolean };
     delete raw.isExample;
     const photos = Array.isArray(raw.photos) ? raw.photos : raw.photoUrl ? [raw.photoUrl] : [];
-    return { ...raw, photos, photoUrl: photos[0] || "" };
+    return { ...raw, photos, photoUrl: photos[0] || "", menu: Array.isArray(raw.menu) ? raw.menu : [] };
   });
-  db.speeds = (db.speeds || []).map((s) => ({ ...s, by: s.by === "admin" ? "admin" : "pengunjung" }));
+  db.speeds = (db.speeds || []).map((s) => ({ ...s, by: s.by === "admin" ? "admin" : "pengunjung", loss: typeof s.loss === "number" ? s.loss : null }));
   db.version = 2;
   return db;
 }

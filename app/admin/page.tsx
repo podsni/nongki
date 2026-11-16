@@ -6,6 +6,7 @@ import { Photo, Rating, WifiBadge } from "@/components/ui";
 import { isAdmin } from "@/lib/auth";
 import { storageMode } from "@/lib/db";
 import { listPlaces } from "@/lib/places";
+import { fmtRp } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function AdminHome() {
                 <p className="truncate font-semibold">{p.name}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
-                <Rating place={p} /> · {p.photos.length} foto · {p.wifi.length} WiFi · {p.speedCount} tes
+                <Rating place={p} /> · {p.photos.length} foto · {p.wifi.length} WiFi · {p.speedCount} tes{p.americano ? ` · Americano ${fmtRp(p.americano.price, true)}` : ""}
               </div>
               <WifiBadge level={p.level} mbps={p.avgDown} />
               <div className="flex flex-wrap gap-2 pt-1">

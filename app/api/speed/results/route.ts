@@ -1,5 +1,5 @@
 import { isAdmin } from "@/lib/auth";
-import { addSpeed } from "@/lib/places";
+import { addSpeedsFromBody } from "@/lib/places";
 import { allow, clientIp } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +12,10 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, error: "Terlalu banyak hasil disimpan. Coba lagi beberapa menit lagi." }, { status: 429 });
     }
     const body = (await req.json()) as Record<string, unknown>;
-    const r = await addSpeed(body, admin ? "admin" : "pengunjung");
-    return Response.json({ ok: true, result: r });
+    // pengunjung hanya boleh 1 hasil per kiriman; admin boleh satu sesi (maks. 10)
+    if (!admin && Array.isArray(body.results) && body.results.length > 1) throw new Error("Pengunjung hanya bisa menyimpan 1 hasil per kiriman");
+    const results = await addSpeedsFromBody(body, admin ? "admin" : "pengunjung");
+    return Response.json({ ok: true, results, result: results[0] });
   } catch (e) {
     return Response.json({ ok: false, error: e instanceof Error ? e.message : "Gagal menyimpan" }, { status: 400 });
   }

@@ -5,6 +5,15 @@ export type Wifi = {
   note: string;
 };
 
+/** Harga satu menu, mis. Americano. `checkedAt` = tanggal terakhir dicek (YYYY-MM-DD). */
+export type MenuPrice = {
+  id: string;
+  item: string;
+  price: number; // Rupiah
+  note: string; // ukuran / varian, mis. "12 oz, panas"
+  checkedAt: string;
+};
+
 export type HoursRow = { day: string; text: string };
 
 export type Place = {
@@ -30,6 +39,7 @@ export type Place = {
   mapsUrl: string;
   description: string;
   wifi: Wifi[];
+  menu: MenuPrice[]; // harga menu; Americano = item yang namanya mengandung "americano"
   createdAt: string;
   updatedAt: string;
 };
@@ -42,6 +52,7 @@ export type SpeedResult = {
   up: number;
   ping: number;
   jitter: number;
+  loss: number | null; // % permintaan ping yang gagal/timeout (null untuk data lama)
   server: string;
   by: "admin" | "pengunjung";
   createdAt: string;
@@ -61,6 +72,7 @@ export type PlaceView = Place & {
   avgPing: number | null;
   speedCount: number;
   level: SpeedLevel | null;
+  americano: MenuPrice | null;
 };
 
 export const CATEGORIES = [
