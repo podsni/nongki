@@ -5,6 +5,23 @@ import { fmtMbps, fmtRp } from "./util";
 /** URL publik situs (dipakai untuk og:url, og:image, QR story). */
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://nongki-malang.vercel.app").replace(/\/$/, "");
 export const SITE_HOST = SITE_URL.replace(/^https?:\/\//, "");
+
+/** Domain resmi yang boleh dipakai di link share (selain itu → SITE_URL). Tambah lewat env ALLOWED_HOSTS="a.com,b.com". */
+export const ALLOWED_HOSTS = new Set(
+  [SITE_HOST, "nongki-malang.vercel.app", "nongki.bangundwir.my.id", ...(process.env.ALLOWED_HOSTS || "").split(",")]
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** Ubah nilai header Host menjadi base URL yang aman (allowlist → cegah host header injection). */
+export function baseUrlFor(rawHost: string | null | undefined, proto?: string | null): string {
+  const host = (rawHost || "").split(",")[0].trim().toLowerCase().replace(/\.$/, "");
+  if (ALLOWED_HOSTS.has(host)) return `https://${host}`;
+  if (process.env.NODE_ENV !== "production" && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `${proto === "https" ? "https" : "http"}://${host}`;
+  return SITE_URL;
+}
+
+export const hostOf = (base: string) => base.replace(/^https?:\/\//, "");
 export const SITE_NAME = "Nongki";
 export const SITE_TAGLINE = "Tempat ngopi & nongkrong + cek WiFi";
 export const SITE_DESC = "Rekomendasi tempat ngopi & nongkrong di Malang, lengkap dengan kecepatan WiFi dari tes nyata, daftar WiFi & password-nya, dan harga Americano.";
@@ -20,9 +37,9 @@ export function imageVersion(p: Pick<PlaceView, "updatedAt" | "speedCount" | "ph
 }
 
 /** Metadata lengkap: title, description, canonical, Open Graph (id_ID) & Twitter. */
-export function pageMeta({ title, description, path, image, imageAlt }: { title: string; description: string; path: string; image: string; imageAlt: string }): Metadata {
-  const url = `${SITE_URL}${path}`;
-  const img = { url: image.startsWith("http") ? image : `${SITE_URL}${image}`, width: OG_SIZE.width, height: OG_SIZE.height, alt: imageAlt, type: "image/jpeg" };
+export function pageMeta({ base = SITE_URL, title, description, path, image, imageAlt }: { base?: string; title: string; description: string; path: string; image: string; imageAlt: string }): Metadata {
+  const url = `${base}${path}`;
+  const img = { url: image.startsWith("http") ? image : `${base}${image}`, width: OG_SIZE.width, height: OG_SIZE.height, alt: imageAlt, type: "image/jpeg" };
   return {
     title,
     description,

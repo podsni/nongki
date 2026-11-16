@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_DESC, SITE_NAME, SITE_TAGLINE, pageMeta } from "@/lib/site";
+import { requestBase } from "@/lib/host";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Logo } from "@/components/Nav";
@@ -9,7 +10,9 @@ import { listPlaces } from "@/lib/places";
 import { CATEGORIES } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { ...pageMeta({ title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: SITE_DESC, path: "/", image: "/og/home.jpg", imageAlt: "Nongki — rekomendasi tempat ngopi lengkap dengan kecepatan WiFi" }), title: { absolute: `${SITE_NAME} — ${SITE_TAGLINE}` } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { ...pageMeta({ base: await requestBase(), title: `${SITE_NAME} — ${SITE_TAGLINE}`, description: SITE_DESC, path: "/", image: "/og/home.jpg", imageAlt: "Nongki — rekomendasi tempat ngopi lengkap dengan kecepatan WiFi" }), title: { absolute: `${SITE_NAME} — ${SITE_TAGLINE}` } };
+}
 
 export default async function Home() {
   const places = await listPlaces();

@@ -7,7 +7,7 @@ import sharp from "sharp";
 import type { PlaceView, SpeedResult } from "./types";
 import { fmtMbps, fmtRp, openStatus, photoSize } from "./util";
 import { computeStats } from "./wifistats";
-import { OG_SIZE, SITE_HOST, SITE_URL, STORY_SIZE } from "./site";
+import { OG_SIZE, SITE_URL, STORY_SIZE, hostOf } from "./site";
 
 const C = {
   esp900: "#2b1a12",
@@ -105,6 +105,7 @@ const levelColor = (mbps: number | null) => (mbps == null ? C.ink500 : mbps >= 3
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 
 async function encode(img: ImageResponse, fmt: "jpeg" | "png") {
+  // Isi gambar bergantung pada domain (Host) → cache CDN per host.
   const raw = Buffer.from(await img.arrayBuffer());
   const out = fmt === "jpeg" ? await sharp(raw).jpeg({ quality: 82, mozjpeg: true }).toBuffer() : await sharp(raw).png({ palette: true, quality: 90, effort: 8, compressionLevel: 9 }).toBuffer();
   return new Response(new Uint8Array(out), {
@@ -112,13 +113,14 @@ async function encode(img: ImageResponse, fmt: "jpeg" | "png") {
       "content-type": fmt === "jpeg" ? "image/jpeg" : "image/png",
       "content-length": String(out.length),
       "cache-control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
+      vary: "Host",
     },
   });
 }
 
 /* ---------------------------------------------------------------- OG: tempat */
 
-export async function placeOg(p: PlaceView) {
+export async function placeOg(p: PlaceView, base = SITE_URL) {
   const photo = await photoData(p.photos[0] || p.photoUrl, 600, 630);
   const chips: { icon: React.ReactNode; text: string; bg: string; fg: string }[] = [];
   if (p.rating != null) chips.push({ icon: <Star s={30} />, text: `${p.rating.toLocaleString("id-ID")}${p.reviews != null ? ` (${p.reviews.toLocaleString("id-ID")})` : ""}`, bg: "rgba(255,255,255,0.1)", fg: C.cream50 });
@@ -160,7 +162,7 @@ export async function placeOg(p: PlaceView) {
               ))}
             </div>
           </div>
-          <div style={{ display: "flex", fontSize: 22, color: C.caramel, fontWeight: 700 }}>{SITE_HOST}</div>
+          <div style={{ display: "flex", fontSize: 22, color: C.caramel, fontWeight: 700 }}>{hostOf(base)}</div>
         </div>
       </div>
     ),
@@ -230,14 +232,14 @@ function qrDataUrl(text: string) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-export async function placeStory(p: PlaceView, speeds: SpeedResult[]) {
+export async function placeStory(p: PlaceView, speeds: SpeedResult[], base = SITE_URL) {
   const W = STORY_SIZE.width;
   const PH = 1040;
   const photo = await photoData(p.photos[0] || p.photoUrl, W, PH);
   const st = computeStats(speeds);
   const status = openStatus(p);
-  const url = `${SITE_URL}/tempat/${p.slug}`;
-  const shortUrl = `${SITE_HOST}/tempat/${p.slug}`;
+  const url = `${base}/tempat/${p.slug}`;
+  const shortUrl = `${hostOf(base)}/tempat/${p.slug}`;
   const r1 = (n: number) => fmtMbps(n, n >= 100 ? 0 : 1);
   const tiles: { label: string; value: string; sub: string; color: string }[] = [
     p.americano

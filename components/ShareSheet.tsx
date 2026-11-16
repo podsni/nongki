@@ -33,7 +33,10 @@ function Glyph({ k }: { k: "wa" | "tg" | "x" | "fb" }) {
   );
 }
 
-export function ShareSheet({ url, title, text, storyUrl, slug, className = "" }: Props) {
+export function ShareSheet({ url: serverUrl, title, text: serverText, storyUrl, slug, className = "" }: Props) {
+  // Link mengikuti domain yang sedang dibuka (mis. nongki.bangundwir.my.id) — diambil dari window.location saat sheet dibuka.
+  const [url, setUrl] = useState(serverUrl);
+  const text = serverText.split(serverUrl).join(url);
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -122,6 +125,7 @@ export function ShareSheet({ url, title, text, storyUrl, slug, className = "" }:
     <>
       <button
         onClick={() => {
+          setUrl(window.location.origin + new URL(serverUrl).pathname);
           setOpen(true);
           void loadFile(); // siapkan file story selagi sheet terbuka agar share tetap dalam "user activation"
         }}

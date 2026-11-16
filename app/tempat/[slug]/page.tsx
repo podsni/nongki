@@ -12,7 +12,8 @@ import { FACILITIES } from "@/lib/types";
 import { fmtDate, fmtMbps, fmtRp, levelOf, mapsRouteUrl, openStatus, timeAgo } from "@/lib/util";
 import { computeStats } from "@/lib/wifistats";
 import { WifiDetails } from "@/components/WifiDetails";
-import { SITE_URL, imageVersion, pageMeta, placeDescription, placeShareText } from "@/lib/site";
+import { requestBase } from "@/lib/host";
+import { imageVersion, pageMeta, placeDescription, placeShareText } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!r) return { title: "Tempat tidak ditemukan", robots: { index: false } };
   const p = r.place;
   return pageMeta({
+    base: await requestBase(),
     title: p.area ? `${p.name} · ${p.area}` : p.name,
     description: placeDescription(p),
     path: `/tempat/${p.slug}`,
@@ -40,7 +42,7 @@ export default async function Detail({ params }: Props) {
   const facs = FACILITIES.filter((f) => p.facilities.includes(f.key));
   const wifiName = (id: string | null) => p.wifi.find((w) => w.id === id)?.ssid;
   const status = openStatus(p);
-  const pageUrl = `${SITE_URL}/tempat/${p.slug}`;
+  const pageUrl = `${await requestBase()}/tempat/${p.slug}`;
   const placeStats = computeStats(speeds);
   const wifiStats = Object.fromEntries(p.wifi.map((w) => [w.id, computeStats(speeds.filter((s) => s.wifiId === w.id))]));
   const otherMenu = p.menu.filter((m) => m.id !== p.americano?.id);
