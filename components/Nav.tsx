@@ -16,13 +16,12 @@ function active(path: string, href: string) {
   return path.startsWith(base) && !href.includes("view=peta");
 }
 
-export function Logo({ light = false }: { light?: boolean }) {
+export function Logo({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
   return (
-    <Link href="/" className="flex items-center gap-2" aria-label="Nongki beranda">
-      <span className="grid size-9 place-items-center rounded-xl bg-caramel-500 text-white">
-        <Icon name="coffee" size={20} />
-      </span>
-      <span className={`font-display text-2xl font-bold ${light ? "text-cream-50" : "text-espresso-900"}`}>Nongki</span>
+    <Link href="/" className="flex min-h-11 items-center gap-2" aria-label="Nongki beranda">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icon.svg" alt="" width={compact ? 30 : 36} height={compact ? 30 : 36} className={compact ? "size-[30px]" : "size-9"} />
+      <span className={`font-display font-bold ${compact ? "text-xl" : "text-2xl"} ${light ? "text-cream-50" : "text-espresso-900"}`}>Nongki</span>
     </Link>
   );
 }
@@ -56,15 +55,15 @@ export function BottomNav() {
   if (path.startsWith("/admin")) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white pb-[env(safe-area-inset-bottom)] shadow-[var(--shadow-sticky)] md:hidden" aria-label="Navigasi utama">
-      <div className="mx-auto flex max-w-md justify-between px-2 pt-2 pb-2">
+      <div className="mx-auto flex max-w-md justify-between px-2 pt-1.5 pb-1.5">
         {ITEMS.map((it) => {
           const on = active(path, it.href);
           return (
-            <Link key={it.href} href={it.href} className="flex w-20 flex-col items-center gap-1">
+            <Link key={it.href} href={it.href} aria-current={on ? "page" : undefined} className="flex min-h-12 w-20 flex-col items-center justify-center gap-0.5">
               <span className={`grid h-8 w-14 place-items-center rounded-full ${on ? "bg-cream-100 text-espresso-600" : "text-ink-500"}`}>
                 <Icon name={it.icon} size={22} />
               </span>
-              <span className={`text-xs ${on ? "font-semibold text-espresso-600" : "text-ink-500"}`}>{it.label}</span>
+              <span className={`text-[11px] leading-none ${on ? "font-semibold text-espresso-600" : "text-ink-500"}`}>{it.label}</span>
             </Link>
           );
         })}

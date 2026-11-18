@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Logo } from "@/components/Nav";
 import { PlaceCard, PlaceRow, SectionHeader } from "@/components/ui";
-import { NearbyHeroButton, NearbySection } from "@/components/Nearby";
+import { NearbyHeroButton, NearbyIconButton, NearbySection } from "@/components/Nearby";
 import { listPlaces } from "@/lib/places";
 import { CATEGORIES } from "@/lib/types";
 
@@ -21,59 +21,63 @@ export default async function Home() {
 
   return (
     <main>
+      {/* Bar atas ringkas (HP) — sticky */}
+      <header className="sticky top-0 z-40 bg-espresso-900/95 pt-[env(safe-area-inset-top)] text-cream-50 backdrop-blur md:hidden">
+        <div className="flex h-14 items-center gap-2 px-4">
+          <Logo light compact />
+          <div className="ml-auto flex items-center gap-1">
+            <NearbyIconButton className="text-cream-50 hover:bg-white/10" />
+            <Link href="/cek-speed" aria-label="Cek kecepatan internet" className="grid size-11 place-items-center rounded-full text-mint-100 hover:bg-white/10">
+              <Icon name="zap" size={20} />
+            </Link>
+          </div>
+        </div>
+      </header>
+
       <section className="bg-espresso-900 text-cream-50">
-        <div className="mx-auto grid [&>*]:min-w-0 max-w-6xl gap-8 px-4 pt-6 pb-8 md:grid-cols-[1.1fr_0.9fr] md:px-6 md:py-16">
-          <div className="space-y-5">
-            <div className="md:hidden">
-              <Logo light />
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 pt-1 pb-4 [&>*]:min-w-0 md:grid-cols-[1.15fr_0.85fr] md:items-center md:gap-10 md:px-6 md:py-10">
+          <div className="space-y-3 md:space-y-5">
+            <div className="space-y-1 md:space-y-3">
+              <h1 className="text-[22px] leading-tight font-extrabold tracking-tight md:text-[40px] md:leading-[1.1]">Mau ngopi di mana hari ini?</h1>
+              <p className="text-sm text-caramel-100 md:text-lg">
+                <span className="font-semibold text-caramel-500">Lengkap dengan kecepatan WiFi-nya.</span>
+                <span className="hidden md:inline"> Hasil cek internet dari pengunjung, daftar WiFi &amp; password — tinggal salin.</span>
+              </p>
             </div>
-            <h1 className="text-[28px] leading-tight font-extrabold tracking-tight md:text-5xl">
-              Mau ngopi di mana hari ini?
-              <span className="block text-caramel-500">Lengkap dengan kecepatan WiFi-nya.</span>
-            </h1>
-            <p className="max-w-xl text-sm text-cream-200 md:text-base">
-              Rekomendasi tempat ngopi &amp; nongkrong, hasil cek internet dari pengunjung, plus daftar WiFi dan password-nya — tinggal salin.
-            </p>
-            <form action="/jelajah" className="flex max-w-xl gap-2">
-              <label className="flex h-12 flex-1 items-center gap-2 rounded-[14px] bg-white px-4 text-ink-900">
-                <Icon name="search" size={18} className="text-ink-500" />
-                <input name="q" placeholder="Cari kafe, warkop, atau area…" className="w-full bg-transparent text-sm outline-none placeholder:text-ink-500" aria-label="Cari tempat" />
+            <form action="/jelajah" className="flex max-w-xl gap-2" role="search">
+              <label className="flex h-12 flex-1 items-center gap-2 rounded-[14px] bg-white pr-0.5 pl-4 text-ink-900 shadow-sm focus-within:ring-2 focus-within:ring-caramel-500">
+                <Icon name="search" size={18} className="shrink-0 text-ink-500" />
+                <input name="q" type="search" enterKeyHint="search" placeholder="Cari kafe, warkop, atau area…" className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-500 md:text-sm" aria-label="Cari tempat" />
+                <NearbyIconButton inSearch className="text-espresso-600 hover:bg-cream-100" />
               </label>
-              <button className="grid size-12 place-items-center rounded-[14px] bg-caramel-500 text-white" aria-label="Cari">
-                <Icon name="search" size={20} />
+              <button className="hidden h-12 items-center gap-2 rounded-[14px] bg-caramel-500 px-5 text-sm font-semibold text-white hover:opacity-95 md:inline-flex">
+                <Icon name="search" size={18} /> Cari
               </button>
             </form>
-            <NearbyHeroButton />
-            <div className="grid max-w-xl grid-cols-5 gap-2">
+            <nav aria-label="Kategori" className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:px-0">
               {CATEGORIES.map((c) => (
-                <Link key={c.key} href={`/jelajah?cat=${c.key}`} className="flex flex-col items-center gap-1.5 rounded-[14px] p-1 text-center hover:bg-white/5">
-                  <span className="grid size-12 place-items-center rounded-[16px] bg-white/10 text-caramel-100 md:size-14">
-                    <Icon name={c.icon} size={22} />
-                  </span>
-                  <span className="text-xs font-semibold">{c.label}</span>
+                <Link key={c.key} href={`/jelajah?cat=${c.key}`} className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 text-sm font-semibold text-cream-50 hover:bg-white/15">
+                  <Icon name={c.icon} size={16} className="text-caramel-100" /> {c.label}
                 </Link>
               ))}
-            </div>
+              <Link href="/jelajah?sort=americano" className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 text-sm font-semibold text-cream-50 hover:bg-white/15">
+                <Icon name="coffee" size={16} className="text-caramel-100" /> Americano murah
+              </Link>
+            </nav>
           </div>
           <div className="hidden md:block">
-            <div className="relative h-full min-h-80 overflow-hidden rounded-[26px] bg-gradient-to-br from-espresso-600 to-espresso-900 p-6">
-              <div className="absolute -top-10 -right-10 size-64 rounded-full bg-white/5" />
-              <div className="absolute right-24 bottom-10 size-40 rounded-full bg-white/5" />
+            <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-espresso-600 to-espresso-900 p-6">
+              <div className="absolute -top-10 -right-10 size-48 rounded-full bg-white/5" />
               <div className="relative space-y-4">
                 <span className="inline-flex items-center gap-2 rounded-full bg-mint-100 px-3 py-1.5 text-sm font-semibold text-mint-600">
-                  <Icon name="wifi" size={16} /> Cek kecepatan internet di tempat
+                  <Icon name="wifi" size={16} /> Cek internet di tempat
                 </span>
-                <p className="max-w-xs text-2xl font-bold">Ukur download, upload, ping &amp; jitter langsung dari browser.</p>
-                <Link href="/cek-speed" className="inline-flex items-center gap-2 rounded-[14px] bg-caramel-500 px-5 py-3 font-semibold text-white">
-                  <Icon name="zap" size={18} /> Mulai cek
-                </Link>
-                <div className="flex gap-3 pt-4">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink-900">
-                    <Icon name="star" size={14} fill="currentColor" className="text-star" /> Rating dari Google Maps
-                  </span>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-caramel-500 px-3 py-1.5 text-sm font-semibold text-white">
-                    <Icon name="lock" size={14} /> Banyak WiFi per tempat
-                  </span>
+                <p className="max-w-xs text-xl font-bold">Ukur download, upload, ping &amp; jitter langsung dari browser.</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link href="/cek-speed" className="inline-flex h-11 items-center gap-2 rounded-[14px] bg-caramel-500 px-5 font-semibold text-white">
+                    <Icon name="zap" size={18} /> Mulai cek
+                  </Link>
+                  <NearbyHeroButton />
                 </div>
               </div>
             </div>
@@ -81,7 +85,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-6 md:py-10">
+      <div className="mx-auto max-w-6xl space-y-7 px-4 pt-4 pb-6 md:space-y-10 md:px-6 md:py-10">
         <NearbySection places={places} />
         <section className="space-y-3">
           <SectionHeader title="Rekomendasi untukmu" href="/jelajah" />

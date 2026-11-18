@@ -147,7 +147,7 @@ export function SectionHeader({ title, href, action = "Lihat semua" }: { title: 
     <div className="flex items-center justify-between">
       <h2 className="text-base font-bold md:text-lg">{title}</h2>
       {href && (
-        <Link href={href} className="text-xs font-semibold text-espresso-600 hover:underline">
+        <Link href={href} className="-mr-2 inline-flex min-h-11 items-center px-2 text-xs font-semibold text-espresso-600 hover:underline">
           {action}
         </Link>
       )}

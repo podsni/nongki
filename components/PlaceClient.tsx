@@ -30,7 +30,7 @@ export function useToast() {
     window.setTimeout(() => setMsg(""), 2200);
   };
   const node = msg ? (
-    <div role="status" className="fixed inset-x-4 bottom-24 z-50 mx-auto flex max-w-sm items-center gap-2 rounded-[14px] bg-espresso-900 px-4 py-3 text-sm font-medium text-white shadow-lg md:bottom-8">
+    <div role="status" className="fixed inset-x-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-sm items-center gap-2 rounded-[14px] bg-espresso-900 px-4 py-3 text-sm font-medium text-white shadow-lg md:bottom-8">
       <Icon name="check" size={16} className="text-mint-100" strokeWidth={3} /> {msg}
     </div>
   ) : null;

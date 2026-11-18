@@ -15,6 +15,27 @@ export function byDistance(places: PlaceView[], loc: Loc | null) {
     .sort((a, b) => a.km - b.km);
 }
 
+/** Tombol ikon "lokasi saya" (bar atas HP & di dalam kolom cari). */
+export function NearbyIconButton({ className = "", inSearch = false }: { className?: string; inSearch?: boolean }) {
+  const g = useGeo();
+  const asking = g.status === "asking";
+  return (
+    <button
+      type="button"
+      aria-label={g.loc ? "Lihat tempat terdekat" : "Cari terdekat dari lokasiku"}
+      title="Cari terdekat"
+      onClick={async () => {
+        document.getElementById("terdekat")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (!g.loc) await locate();
+      }}
+      className={`relative grid shrink-0 place-items-center rounded-full ${inSearch ? "size-11 rounded-[12px]" : "size-11"} ${className}`}
+    >
+      <Icon name={asking ? "loader" : "locate"} size={20} className={asking ? "animate-spin" : ""} />
+      {g.loc && <span className="absolute top-2 right-2 size-2 rounded-full bg-mint-600 ring-2 ring-white" aria-hidden />}
+    </button>
+  );
+}
+
 /** Tombol di hero beranda: minta lokasi lalu gulir ke bagian "Terdekat dari kamu". */
 export function NearbyHeroButton() {
   const g = useGeo();
@@ -42,18 +63,18 @@ export function NearbySection({ places }: { places: PlaceView[] }) {
     <section id="terdekat" className="scroll-mt-20 space-y-3" data-testid="nearby">
       <SectionHeader title="Terdekat dari kamu" href={g.loc ? "/jelajah?sort=jarak" : undefined} />
       {!g.loc ? (
-        <div className="flex flex-col gap-3 rounded-[18px] border border-dashed border-line bg-white p-4 sm:flex-row sm:items-center">
-          <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-caramel-100 text-espresso-600">
+        <div className="flex items-center gap-3 rounded-[18px] border border-line bg-white p-3 md:p-4">
+          <span className="hidden size-11 shrink-0 place-items-center rounded-[14px] bg-caramel-100 text-espresso-600 sm:grid">
             <Icon name="locate" size={20} />
           </span>
           <div className="min-w-0 flex-1 text-sm">
-            <b className="block text-ink-900">Cari tempat ngopi terdekat dari lokasimu</b>
-            <span className="text-ink-500">Lokasimu hanya dipakai di browser ini untuk menghitung jarak — tidak dikirim atau disimpan di server.</span>
+            <b className="block text-ink-900">Tempat ngopi di dekatmu</b>
+            <span className="text-xs text-ink-500 md:text-sm">Lokasi tidak disimpan di server.</span>
             {g.msg && !asking && <span className="mt-1 block font-medium text-amber-500" role="alert">{g.msg}</span>}
           </div>
           <button onClick={() => locate()} disabled={asking} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-espresso-600 px-4 text-sm font-semibold text-white disabled:opacity-70">
             <Icon name={asking ? "loader" : "locate"} size={18} className={asking ? "animate-spin" : ""} />
-            {asking ? "Mencari lokasi…" : g.msg ? "Coba lagi" : "Cari terdekat"}
+            {asking ? "Mencari…" : g.msg ? "Coba lagi" : "Cari terdekat"}
           </button>
         </div>
       ) : (
@@ -64,7 +85,7 @@ export function NearbySection({ places }: { places: PlaceView[] }) {
             ))}
           </div>
           {near.length === 0 && <p className="rounded-[18px] border border-dashed border-line p-4 text-sm text-ink-500">Belum ada tempat dengan koordinat untuk dihitung jaraknya.</p>}
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-500">
+          <p className="flex flex-wrap items-center gap-x-3 text-xs text-ink-500 [&>a]:inline-flex [&>a]:min-h-11 [&>a]:items-center [&>button]:min-h-11">
             <span className="inline-flex items-center gap-1">
               <span className="size-2 rounded-full bg-caramel-500" /> Lokasimu{g.loc.acc ? ` (akurasi ±${g.loc.acc.toLocaleString("id-ID")} m)` : ""}
             </span>

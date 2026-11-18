@@ -37,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="id" className={`${jakarta.variable} ${fraunces.variable}`}>
       <body className="min-h-dvh antialiased">
         <SiteHeader />
-        <div className="pb-24 md:pb-0">{children}</div>
+        <div className="pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
         <footer className="hidden border-t border-line py-8 text-center text-sm text-ink-500 md:block">
           Nongki · Diseduh di Malang · Data tempat & foto dari Google Maps, kecepatan internet dari tes pengunjung
         </footer>
