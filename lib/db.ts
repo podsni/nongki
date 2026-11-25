@@ -17,7 +17,7 @@ export function storageMode(): "blob" | "file" {
 const EMPTY = (): DB => ({ version: 2, places: [], speeds: [] });
 
 // Migrasi ringan untuk data lama: pastikan field baru ada.
-function normalize(db: DB): DB {
+export function normalize(db: DB): DB {
   db.places = (db.places || []).map((p) => {
     const raw = p as Place & { isExample?: boolean };
     delete raw.isExample;
@@ -62,7 +62,10 @@ export async function loadDB(): Promise<DB> {
 export async function saveDB(db: DB) {
   if (blobEnabled()) return writeBlob(db);
   await fs.mkdir(path.dirname(LOCAL_FILE), { recursive: true });
-  await fs.writeFile(LOCAL_FILE, JSON.stringify(db, null, 2));
+  // Tulis ke file sementara lalu rename → atomik (tidak ada file setengah jadi).
+  const tmp = `${LOCAL_FILE}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2));
+  await fs.rename(tmp, LOCAL_FILE);
 }
 
 // Simple serialized read-modify-write within one instance.

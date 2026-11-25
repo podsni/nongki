@@ -22,9 +22,14 @@ export default async function AdminHome() {
             {places.length} tempat · penyimpanan: {storageMode() === "blob" ? "Vercel Blob" : "file lokal"}
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <Link href="/admin/backup" className="inline-flex h-11 items-center gap-2 rounded-[14px] border border-line bg-white px-4 text-sm font-semibold text-ink-900 hover:border-espresso-400">
+          <Icon name="database" size={18} /> Backup
+        </Link>
         <Link href="/admin/tambah" className="inline-flex h-11 items-center gap-2 rounded-[14px] bg-espresso-600 px-4 text-sm font-semibold text-white">
           <Icon name="plus" size={18} /> Tambah dari Google Maps
         </Link>
+        </div>
       </div>
       {places.length === 0 && (
         <div className="rounded-[18px] border border-dashed border-line bg-white p-6 text-center text-sm text-ink-500">

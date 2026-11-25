@@ -90,6 +90,7 @@ _(angka di atas hanya contoh format)_
 - Kategori, fasilitas, jam buka, harga, koordinat, dll.
 - **Tes kecepatan langsung dari halaman admin** per tempat, bisa **sesi multi-tes (1×/3×/5×)**; semua hasil sesi disimpan sekaligus dengan label _"Diukur admin di lokasi"_, langsung masuk riwayat, panel WiFi details & badge.
 - Hapus tempat dan hapus hasil tes yang keliru.
+- **Backup & pemulihan** (`/admin/backup`): ekspor semua data (.json, plus daftar tempat .csv), impor dengan **pratinjau perubahan** (mode _Gabungkan_ atau _Ganti semua_), **snapshot otomatis** sebelum setiap impor/pemulihan, riwayat backup (unduh / pulihkan / hapus) dan tombol **Buat backup sekarang**. Lihat [Backup & pemulihan](#backup--pemulihan).
 
 ---
 
@@ -134,6 +135,8 @@ Browser ──► Next.js (Vercel Functions)
   - `Place`: nama, slug, alamat, area, lat/lng, rating, ulasan, harga, jam buka, kategori, fasilitas, `photos[]` (galeri; `photoUrl` = sampul), `wifi[]` ({ id, ssid, password, note }), `menu[]` ({ id, item, price, note, checkedAt } — Americano = item yang namanya mengandung "americano"), link Maps.
   - `SpeedResult`: placeId, wifiId (opsional), down/up (Mbps), ping/jitter (ms), `loss` (%), server, `by` (`admin` | `pengunjung`), waktu tes.
 - Tulis data memakai pola read-modify-write yang diserialkan per instance (`mutateDB`). Cukup untuk trafik kecil; lihat [Keterbatasan](#keterbatasan).
+- Snapshot backup disimpan di Blob privat yang sama dengan prefix `nongki/backups/` (lokal: `.data/backups/`). Nama file memuat jenis, waktu WIB dan jumlah data, mis. `auto-20261125-104314-p12-w20-s80-m12-sebelum-gabung.json`.
+- Penulisan lokal bersifat atomik (tulis file sementara lalu `rename`); penulisan Blob selalu satu `put` utuh.
 - Tanpa `BLOB_READ_WRITE_TOKEN`, data disimpan ke `.data/db.json` (otomatis dibuat, di-ignore git).
 - **Tidak ada data contoh/seed**: database baru selalu kosong, isi lewat admin.
 - Kenapa bukan Postgres? Saat proyek dibuat, provisioning Neon/Upstash lewat Marketplace butuh persetujuan manual di dashboard; Blob bisa dibuat & disambungkan langsung. Mengganti `lib/db.ts` ke Postgres/Redis cukup mengubah `loadDB`/`saveDB`.
@@ -228,6 +231,37 @@ Di kartu **Harga menu**: isi harga Americano (angka saja, otomatis berformat Rp)
 
 > Penting: ukur hanya saat benar-benar tersambung ke WiFi tempat tersebut. Tes dari rumah/kantor/data seluler akan membuat badge menyesatkan.
 
+### Backup & pemulihan
+Buka **Admin → Backup** (`/admin/backup`).
+
+**Ekspor**
+- **Unduh backup (.json)** → file `nongki-backup-YYYYMMDD-HHmm.json` (waktu WIB) berisi semua tempat, WiFi **termasuk password**, harga menu/Americano, dan semua hasil tes:
+  ```json
+  { "app": "nongki", "schemaVersion": 2, "exportedAt": "2026-11-25T03:43:00.000Z",
+    "counts": { "places": 12, "wifi": 20, "speeds": 80, "menu": 12 },
+    "data": { "version": 2, "places": [...], "speeds": [...] } }
+  ```
+- **Daftar tempat (.csv)** → untuk dibuka di Excel/Google Sheets (UTF-8 BOM): nama, area, alamat, koordinat, rating, Americano, WiFi (`ssid=password`), jumlah tes, rata-rata download, link Maps. CSV **tidak bisa** diimpor kembali — pakai JSON.
+- File backup berisi password WiFi: simpan di tempat aman dan jangan dibagikan.
+
+**Impor**
+1. Pilih/seret file `.json` (maks. 4 MB — batas body request Vercel 4,5 MB). File lama berformat `{ places, speeds }` tanpa pembungkus juga diterima.
+2. File divalidasi; data rusak ditolak dengan pesan jelas (bukan JSON, bukan backup Nongki, versi skema lebih baru, tempat tanpa nama, dll). Hasil tes yang tempatnya tidak ada atau angkanya tidak valid dilewati dengan peringatan.
+3. Pilih cara impor:
+   - **Gabungkan** — tempat dicocokkan berdasarkan **ID lalu slug**; yang cocok diperbarui, sisanya ditambahkan. Tempat yang tidak ada di file tetap. Hasil tes digabung berdasarkan ID.
+   - **Ganti semua** — database diganti persis seperti isi file. Harus mengetik **`GANTI`**.
+4. Periksa **Pratinjau perubahan** (baru / berubah / sama / dihapus untuk tempat, WiFi, hasil tes, harga menu + contoh nama tempat), lalu terapkan.
+5. Sebelum menulis, kondisi sekarang otomatis disimpan sebagai **snapshot otomatis** — kalau salah, pulihkan dari riwayat.
+
+Slug selalu dijaga unik (bentrok diberi akhiran `-2`, `-3`, …) dan seluruh data dibersihkan dengan aturan yang sama seperti form admin.
+
+**Riwayat backup**
+- Menampilkan snapshot (Otomatis/Manual) dengan waktu WIB, ukuran dan jumlah data.
+- **Unduh** — lewat route admin (Blob tetap private, tidak ada URL publik).
+- **Pulihkan** — mengganti semua data dengan isi snapshot; harus mengetik **`PULIHKAN`**; kondisi sekarang di-snapshot otomatis dulu (jadi pemulihan pun bisa dibatalkan).
+- **Buat backup sekarang** — snapshot manual.
+- Rotasi: disimpan **30 snapshot otomatis** dan **50 manual** terbaru; yang lebih lama dihapus otomatis.
+
 ---
 
 ## Cara kerja tes kecepatan
@@ -267,6 +301,14 @@ Satu tes memakai sekitar 50–150 MB kuota (tergantung kecepatan).
 | `GET /api/admin/places/:id` | admin | Data lengkap satu tempat + semua hasil tes. |
 | `POST /api/admin/speeds` | admin | Simpan 1–10 hasil tes satu sesi (format sama dengan di atas; label "Diukur admin"). |
 | `DELETE /api/admin/speeds/:id` | admin | Hapus satu hasil tes. |
+| `GET /api/admin/backup/export` | admin | Unduh backup JSON lengkap (`?format=csv` → daftar tempat CSV). |
+| `POST /api/admin/backup/preview` | admin | `{ mode: "merge"\|"replace", data }` → validasi + rencana perubahan, tanpa menulis. |
+| `POST /api/admin/backup/import` | admin | `{ mode, confirm?, data }` → snapshot otomatis lalu terapkan (`confirm: "GANTI"` untuk replace). |
+| `GET /api/admin/backup/snapshots` | admin | Daftar snapshot. |
+| `POST /api/admin/backup/snapshots` | admin | Buat snapshot manual. |
+| `GET /api/admin/backup/snapshots/:name` | admin | Unduh snapshot. |
+| `DELETE /api/admin/backup/snapshots/:name` | admin | Hapus snapshot. |
+| `POST /api/admin/backup/snapshots/:name/restore` | admin | `{ confirm: "PULIHKAN" }` → snapshot otomatis lalu pulihkan (ganti semua). |
 
 Contoh:
 ```bash
@@ -288,7 +330,7 @@ app/
   og/                      Gambar Open Graph beranda & jelajah
   icon.svg, favicon.ico, apple-icon.png, manifest.ts   Ikon & PWA
   cek-speed/               Tes kecepatan publik
-  admin/                   Login, daftar, tambah (import), edit + speedtest
+  admin/                   Login, daftar, tambah (import), edit + speedtest, backup/
   api/                     Route handlers (lihat tabel API)
 components/
   Gallery.tsx              Hero galeri, grid, lightbox (swipe/keyboard)
@@ -298,9 +340,10 @@ components/
   PlaceClient.tsx          Daftar WiFi (salin/tampil password)
   ShareSheet.tsx           Lembar bagikan (Story WA/IG, WhatsApp, Telegram, X, FB)
   geo.ts, Nearby.tsx, Distance.tsx  Lokasi (client-only), Terdekat dari kamu, jarak
-  admin/                   LoginForm, ImportFlow, PlaceForm (WiFi & foto editor)
+  admin/                   LoginForm, ImportFlow, PlaceForm (WiFi & foto editor), BackupPanel
 lib/
   db.ts                    Baca/tulis JSON (Blob / file lokal) + migrasi ringan
+  backup.ts                Ekspor/impor, validasi, pratinjau, snapshot & rotasi, CSV
   places.ts                CRUD tempat & hasil tes, validasi input
   maps.ts                  Import Google Maps (data + galeri foto)
   auth.ts, guard.ts        Sesi admin (HMAC cookie)
@@ -320,6 +363,7 @@ scripts/icons.mjs          Generator favicon/ikon PWA
 - **Import Google Maps memakai scraping** data internal halaman Maps (tidak resmi). Bisa berhenti bekerja jika Google mengubah format atau memblokir IP server; data yang gagal diambil tetap bisa diisi manual.
 - **Foto di-hotlink** dari `googleusercontent.com` (tidak disalin ke storage sendiri). Jika Google menghapus/mengganti foto, gambar bisa hilang → gunakan **Ambil ulang dari Maps**.
 - **Password WiFi tampil publik** di halaman detail (memang tujuan fitur salin password). Jangan simpan password yang tidak boleh diketahui umum.
+- **Snapshot backup ada di Blob store yang sama** dengan database. Untuk cadangan di luar Vercel, unduh file JSON secara berkala dan simpan di tempat lain.
 - **Penyimpanan satu file JSON** di Blob: dua penulisan yang benar-benar bersamaan dari instance berbeda bisa saling menimpa. Cukup untuk skala kecil; pindah ke Postgres untuk skala besar.
 - **Packet loss adalah estimasi** di level HTTP (request ping yang gagal/timeout), bukan ICMP; browser tidak bisa mengukur loss paket mentah.
 - **Harga menu diisi manual** oleh admin (Google Maps tidak menyediakan harga per menu); tanggal _terakhir dicek_ membantu menilai kebaruannya.
