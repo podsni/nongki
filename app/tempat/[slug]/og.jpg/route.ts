@@ -8,5 +8,5 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const r = await getPlace((await params).slug);
   if (!r) return new Response("Not found", { status: 404 });
-  return placeOg(r.place, baseFromRequest(req));
+  return placeOg(r.place, baseFromRequest(req), r.speeds);
 }

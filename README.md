@@ -65,7 +65,8 @@ _(angka di atas hanya contoh format)_
 - **Preview link** (WhatsApp, IG DM, Telegram, X, Facebook, LinkedIn): setiap halaman punya `og:title`, `og:description`, `og:url` absolut, `og:locale=id_ID`, `og:image` **1200×630 JPEG** (± 40–120 KB, `og:image:width/height/type/alt`) + Twitter `summary_large_image`. Gambar dibuat dinamis dengan `next/og` lalu dikompres `sharp`:
   - `/og/home.jpg`, `/og/jelajah.jpg` — branding + kolase foto tempat.
   - `/tempat/[slug]/og.jpg` — foto sampul, nama, area, rating, **harga Americano**, **badge kecepatan WiFi**, buka 24 jam. URL diberi `?v=` (hash `updatedAt` + jumlah tes) agar cache WhatsApp/FB ikut berganti saat data berubah.
-- **Gambar Story** `/tempat/[slug]/story.png` — **1080×1920 PNG** berisi foto, nama, rating, status buka, Americano, rentang download, upload/ping, tes terakhir (WIB), dan **QR code** + link pendek. Konten penting di area aman story (tidak tertutup UI IG/WA). Tambahkan `?download=1` untuk mengunduh.
+- **Gambar Story** `/tempat/[slug]/story.png` — **1080×1920 PNG** berisi foto, nama, rating, status buka, Americano, rentang download, upload/ping, tes terakhir (WIB), dan **QR code** + link pendek. Semua info penting berada di **zona aman y≈250–1600** (atas ±14% tertutup progress bar/profil IG, bawah ±20% tertutup kolom balas/stiker); setiap blok berposisi tetap sehingga tidak ada yang saling menimpa. Nama panjang otomatis mengecil & dibatasi 2 baris, harga disingkat (mis. `Rp1–25rb`), kotak statistik sama tinggi dengan ukuran huruf menyesuaikan lebar. Tambahkan `?download=1` untuk mengunduh.
+- **Gambar kotak** `/tempat/[slug]/square.png` — **1080×1080 PNG** untuk Status WA, feed IG/FB & X (foto, nama, rating, statistik, QR). Di lembar bagikan bisa dipilih **Story 9:16** atau **Kotak 1:1**; tombol **Simpan gambar** sebagai cadangan.
 - **Tombol "Bagikan ke Story"** memakai **Web Share API Level 2** (`navigator.canShare({ files })`) sehingga di HP muncul menu bagikan → pilih **Instagram (Story)** atau **WhatsApp (Status)**. Link ikut disalin untuk ditempel sebagai **stiker Link**. Jika browser tidak bisa membagikan file (mis. desktop), gambar **diunduh** otomatis + link disalin.
 - **Link share mengikuti domain yang dibuka**: dibuka di `nongki.bangundwir.my.id` → `og:url`, `canonical`, `og:image`, teks WhatsApp/Telegram/X/FB, salin link, serta QR & link di gambar story/OG memakai `nongki.bangundwir.my.id`; dibuka di `nongki-malang.vercel.app` → memakai domain itu. Domain diambil dari header `x-forwarded-host`/`host` dan **dicek ke allowlist** (`nongki-malang.vercel.app`, `nongki.bangundwir.my.id`, + env `ALLOWED_HOSTS="a.com,b.com"`); host lain (mis. preview Vercel atau header palsu) jatuh ke `NEXT_PUBLIC_SITE_URL`. Di browser, lembar bagikan memakai `window.location.origin`.
 - **Teks share WhatsApp** rapi: nama (tebal), rating & area, harga Americano, WiFi ± Mbps & ping, buka 24 jam, lalu link.
@@ -251,6 +252,7 @@ Satu tes memakai sekitar 50–150 MB kuota (tergantung kecepatan).
 | `GET /og/home.jpg`, `/og/jelajah.jpg` | publik | Gambar Open Graph 1200×630 (JPEG). |
 | `GET /tempat/:slug/og.jpg` | publik | Gambar Open Graph tempat 1200×630 (JPEG). |
 | `GET /tempat/:slug/story.png` | publik | Gambar story 1080×1920 (PNG), `?download=1` untuk unduh. |
+| `GET /tempat/:slug/square.png` | publik | Gambar kotak 1080×1080 (PNG), `?download=1` untuk unduh. |
 | `GET /api/places` | publik | Daftar tempat + rata-rata kecepatan (tanpa detail password WiFi, hanya jumlah). |
 | `GET /api/speed/ping` | publik | Respons kecil untuk ukur ping. |
 | `GET /api/speed/down?bytes=N` | publik | Stream data acak (maks. 25 MB). |
@@ -282,7 +284,7 @@ curl -b jar -X POST https://nongki-malang.vercel.app/api/admin/import \
 app/
   page.tsx                 Beranda
   jelajah/                 List + peta
-  tempat/[slug]/           Detail tempat (+ og.jpg & story.png route)
+  tempat/[slug]/           Detail tempat (+ og.jpg, story.png & square.png route)
   og/                      Gambar Open Graph beranda & jelajah
   icon.svg, favicon.ico, apple-icon.png, manifest.ts   Ikon & PWA
   cek-speed/               Tes kecepatan publik

@@ -38,23 +38,27 @@ export function ShareSheet({ url: serverUrl, title, text: serverText, storyUrl, 
   const [url, setUrl] = useState(serverUrl);
   const text = serverText.split(serverUrl).join(url);
   const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  type Fmt = "story" | "square";
+  const [fmt, setFmt] = useState<Fmt>("story");
+  const [files, setFiles] = useState<Partial<Record<Fmt, File>>>({});
   const [busy, setBusy] = useState(false);
   const [canFiles, setCanFiles] = useState<boolean | null>(null);
   const toast = useToast();
   const closeRef = useRef<HTMLButtonElement>(null);
-  const fileName = `nongki-${slug}-story.png`;
+  const imgUrl = (f: Fmt) => (f === "story" ? storyUrl : storyUrl.replace("/story.png", "/square.png"));
+  const fileName = (f: Fmt) => `nongki-${slug}-${f}.png`;
   const plain = text.replace(url, "").replace(/\*/g, "").trim(); // tanpa format tebal ala WhatsApp
+  const file = files[fmt] ?? null;
 
-  async function loadFile(): Promise<File | null> {
-    if (file) return file;
+  async function loadFile(f: Fmt): Promise<File | null> {
+    if (files[f]) return files[f]!;
     try {
-      const r = await fetch(storyUrl);
+      const r = await fetch(imgUrl(f));
       if (!r.ok) return null;
-      const f = new File([await r.blob()], fileName, { type: "image/png" });
-      setFile(f);
-      setCanFiles(!!navigator.canShare?.({ files: [f] }));
-      return f;
+      const out = new File([await r.blob()], fileName(f), { type: "image/png" });
+      setFiles((m) => ({ ...m, [f]: out }));
+      setCanFiles(!!navigator.canShare?.({ files: [out] }));
+      return out;
     } catch {
       return null;
     }
@@ -66,37 +70,39 @@ export function ShareSheet({ url: serverUrl, title, text: serverText, storyUrl, 
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-     
   }, [open]);
 
-  async function download(f?: File | null) {
+  function download(f: File | null, which: Fmt = fmt) {
     const a = document.createElement("a");
     if (f) {
       a.href = URL.createObjectURL(f);
       window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-    } else a.href = `${storyUrl}${storyUrl.includes("?") ? "&" : "?"}download=1`;
-    a.download = fileName;
+    } else a.href = `${imgUrl(which)}${imgUrl(which).includes("?") ? "&" : "?"}download=1`;
+    a.download = fileName(which);
     document.body.appendChild(a);
     a.click();
     a.remove();
   }
 
-  async function shareStory() {
+  async function shareImage() {
     setBusy(true);
     try {
       const copied = await copyText(url);
-      const f = file ?? (await loadFile());
+      const f = file ?? (await loadFile(fmt));
       if (f && navigator.canShare?.({ files: [f] })) {
+        // Story (IG/WA): hanya file — beberapa aplikasi menolak file+teks. Link ada di clipboard untuk stiker Link.
+        // Kotak (WA/feed/X): file + teks & link sebagai caption.
+        const data: ShareData = fmt === "story" ? { files: [f], title } : { files: [f], title, text: `${plain}\n${url}` };
         try {
-          await navigator.share({ files: [f], title });
-          toast.show(copied ? "Link disalin — tempel sebagai stiker Link di story" : "Story siap dibagikan");
+          await navigator.share(navigator.canShare(data) ? data : { files: [f] });
+          toast.show(fmt === "story" && copied ? "Link disalin — tempel sebagai stiker Link di story" : "Gambar siap dibagikan");
           return;
         } catch (e) {
           if ((e as Error).name === "AbortError") return;
         }
       }
-      await download(f);
-      toast.show(copied ? "Gambar story diunduh & link disalin. Unggah ke Story WA/IG." : "Gambar story diunduh. Unggah ke Story WA/IG.");
+      download(f);
+      toast.show(copied ? "Gambar disimpan & link disalin. Unggah ke Story/Status." : "Gambar disimpan. Unggah ke Story/Status.");
     } finally {
       setBusy(false);
     }
@@ -127,7 +133,9 @@ export function ShareSheet({ url: serverUrl, title, text: serverText, storyUrl, 
         onClick={() => {
           setUrl(window.location.origin + new URL(serverUrl).pathname);
           setOpen(true);
-          void loadFile(); // siapkan file story selagi sheet terbuka agar share tetap dalam "user activation"
+          // siapkan kedua file selagi sheet terbuka agar share tetap dalam "user activation"
+          void loadFile("story");
+          void loadFile("square");
         }}
         className={className}
         aria-haspopup="dialog"
@@ -146,19 +154,28 @@ export function ShareSheet({ url: serverUrl, title, text: serverText, storyUrl, 
               </button>
             </div>
 
-            <div className="flex gap-4 rounded-[20px] border border-line bg-white p-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={storyUrl} alt={`Gambar story ${title}`} className="aspect-[9/16] w-28 shrink-0 self-start rounded-[14px] bg-espresso-900 object-cover sm:w-32" />
-              <div className="flex min-w-0 flex-1 flex-col justify-center gap-2">
-                <p className="text-sm font-bold">Story WhatsApp &amp; Instagram</p>
-                <p className="text-xs text-ink-500">Gambar 1080×1920 berisi foto, rating, harga Americano, WiFi &amp; QR link. Link ikut disalin untuk stiker Link.</p>
-                <button onClick={shareStory} disabled={busy} className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#f58529] via-[#dd2a7b] to-[#8134af] px-3 text-sm font-semibold text-white disabled:opacity-70" data-testid="share-story">
-                  <Icon name={busy ? "loader" : "sparkle"} size={17} className={busy ? "animate-spin" : ""} /> Bagikan ke Story
-                </button>
-                <button onClick={() => download(file)} className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] border border-line text-sm font-semibold text-espresso-600 hover:border-caramel-500" data-testid="download-story">
-                  <Icon name="download" size={16} /> Unduh gambar story
-                </button>
-                {canFiles === false && <p className="text-[11px] text-ink-500">Browser ini tidak bisa langsung membagikan gambar — tombol Story akan mengunduh gambarnya.</p>}
+            <div className="rounded-[20px] border border-line bg-white p-3">
+              <div className="mb-3 flex gap-1 rounded-full bg-cream-100 p-1" role="tablist" aria-label="Format gambar">
+                {(["story", "square"] as const).map((f) => (
+                  <button key={f} role="tab" aria-selected={fmt === f} onClick={() => setFmt(f)} className={`flex h-10 flex-1 items-center justify-center rounded-full text-xs font-semibold ${fmt === f ? "bg-espresso-600 text-white" : "text-espresso-600"}`} data-testid={`fmt-${f}`}>
+                    {f === "story" ? "Story 9:16 · IG/WA" : "Kotak 1:1 · Status/Feed/X"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img key={fmt} src={imgUrl(fmt)} alt={`Gambar ${fmt === "story" ? "story" : "kotak"} ${title}`} className={`${fmt === "story" ? "aspect-[9/16] w-28 sm:w-32" : "aspect-square w-32 sm:w-36"} shrink-0 self-start rounded-[14px] bg-espresso-900 object-contain`} />
+                <div className="flex min-w-0 flex-1 flex-col justify-center gap-2">
+                  <p className="text-sm font-bold">{fmt === "story" ? "Story Instagram & WhatsApp" : "Status WA, feed & X"}</p>
+                  <p className="text-xs text-ink-500">{fmt === "story" ? "1080×1920, info penting di area aman (tidak tertutup UI story). Link disalin untuk stiker Link." : "1080×1080 dengan QR. Link ikut sebagai caption bila aplikasinya mendukung."}</p>
+                  <button onClick={shareImage} disabled={busy} className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#f58529] via-[#dd2a7b] to-[#8134af] px-3 text-sm font-semibold text-white disabled:opacity-70" data-testid="share-story">
+                    <Icon name={busy ? "loader" : "sparkle"} size={17} className={busy ? "animate-spin" : ""} /> {fmt === "story" ? "Bagikan ke Story" : "Bagikan gambar"}
+                  </button>
+                  <button onClick={() => download(file)} className="inline-flex h-11 items-center justify-center gap-2 rounded-[14px] border border-line text-sm font-semibold text-espresso-600 hover:border-caramel-500" data-testid="download-story">
+                    <Icon name="download" size={16} /> Simpan gambar
+                  </button>
+                  {canFiles === false && <p className="text-[11px] text-ink-500">Browser ini tidak bisa membagikan gambar langsung — gambar akan disimpan, lalu unggah manual.</p>}
+                </div>
               </div>
             </div>
 

@@ -5,7 +5,7 @@ import { ImageResponse } from "next/og";
 import QRCode from "qrcode";
 import sharp from "sharp";
 import type { PlaceView, SpeedResult } from "./types";
-import { fmtMbps, fmtRp, openStatus, photoSize } from "./util";
+import { fmtMbps, openStatus, photoSize } from "./util";
 import { computeStats } from "./wifistats";
 import { OG_SIZE, SITE_URL, STORY_SIZE, hostOf } from "./site";
 
@@ -117,52 +117,149 @@ async function encode(img: ImageResponse, fmt: "jpeg" | "png") {
   });
 }
 
+/* -------------------------------------------------- helper layout (anti kepotong) */
+
+/** Perkiraan bungkus kata: berapa baris untuk lebar `width` pada ukuran `size`. */
+function wrapLines(text: string, size: number, width: number, charW: number) {
+  const max = Math.max(1, Math.floor(width / (size * charW)));
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of text.split(/\s+/)) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (next.length <= max) cur = next;
+    else {
+      if (cur) lines.push(cur);
+      cur = w.length > max ? w.slice(0, max - 1) + "…" : w;
+    }
+  }
+  if (cur) lines.push(cur);
+  return { lines, max };
+}
+
+/** Pilih ukuran huruf terbesar agar teks muat ≤ maxLines; jika tetap tidak muat, potong dengan "…". */
+function fitText(text: string, width: number, sizes: number[], maxLines: number, charW = 0.56) {
+  for (const size of sizes) {
+    const { lines } = wrapLines(text, size, width, charW);
+    if (lines.length <= maxLines) return { size, text };
+  }
+  const size = sizes[sizes.length - 1];
+  const { lines, max } = wrapLines(text, size, width, charW);
+  const kept = lines.slice(0, maxLines);
+  const last = kept[maxLines - 1];
+  kept[maxLines - 1] = (last.length >= max ? last.slice(0, max - 1) : last).replace(/[\s,.·-]+$/, "") + "…";
+  return { size, text: kept.join(" ") };
+}
+
+/** "Rp 1–25.000" → "Rp1–25rb"; angka → "Rp15rb". */
+function shortRp(n: number) {
+  if (n >= 1_000_000) return `Rp${(n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })}jt`;
+  if (n >= 1000) return `Rp${(n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })}rb`;
+  return `Rp${n}`;
+}
+function shortPriceText(t: string) {
+  const nums = (t.match(/\d[\d.]*/g) || []).map((x) => Number(x.replace(/\./g, ""))).filter((x) => isFinite(x));
+  if (!nums.length) return t ? clip(t, 12) : "";
+  if (nums.length === 1) return shortRp(nums[0]);
+  const [a, b] = nums;
+  const k = (n: number) => (n >= 1000 ? `${(n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })}rb` : String(n));
+  return b >= 1000 && a < 1000 ? `Rp${a}–${k(b)}` : `Rp${k(a)}–${k(b)}`;
+}
+const mb = (n: number) => fmtMbps(n, n >= 100 ? 0 : 1);
+const valueSize = (v: string, big: number) => (v.length <= 7 ? big : v.length <= 9 ? big - 6 : v.length <= 11 ? big - 12 : big - 18);
+
+type Tile = { label: string; value: string; sub: string; color: string; muted?: boolean };
+
+/** Tiga kotak statistik yang sama untuk story, square & OG. Selalu terisi (data kosong → teks netral). */
+function placeTiles(p: PlaceView, speeds: SpeedResult[]): Tile[] {
+  const st = computeStats(speeds);
+  const status = openStatus(p);
+  const price: Tile = p.americano
+    ? { label: "Americano", value: shortRp(p.americano.price), sub: p.americano.note || "per gelas", color: C.caramel }
+    : p.priceText
+      ? { label: "Harga", value: shortPriceText(p.priceText), sub: "per orang", color: C.caramel }
+      : { label: "Harga", value: "—", sub: "belum ada data", color: C.caramel, muted: true };
+  const down: Tile = st
+    ? st.down[0] === st.down[1] || st.tests < 2
+      ? { label: "Download", value: `${mb(st.down[1])} Mbps`, sub: `${st.tests} tes`, color: levelColor(p.avgDown) }
+      : { label: "Download", value: `${mb(st.down[0])}–${mb(st.down[1])}`, sub: `Mbps · ${st.tests} tes`, color: levelColor(p.avgDown) }
+    : { label: "WiFi", value: p.wifi.length ? `${p.wifi.length} jaringan` : "Belum dites", sub: "cek speed di Nongki", color: C.mint, muted: !p.wifi.length };
+  const third: Tile = st
+    ? { label: "Upload · Ping", value: `${mb(p.avgUp ?? st.up[1])} Mbps`, sub: `ping ${fmtMbps(p.avgPing ?? st.ping[0], 0)} ms`, color: C.mint }
+    : { label: "Jam buka", value: p.is24h ? "24 jam" : status?.open ? "Buka" : status ? "Tutup" : "—", sub: p.is24h ? "setiap hari" : clip(status?.label.replace(/^(Buka|Tutup) · /, "") || "lihat jadwal", 20), color: C.mint, muted: !status && !p.is24h };
+  return [price, down, third];
+}
+
+function Tiles({ tiles, width, height, big, gap = 18 }: { tiles: Tile[]; width: number; height: number; big: number; gap?: number }) {
+  const w = Math.floor((width - gap * (tiles.length - 1)) / tiles.length);
+  const inner = w - 44; // padding kiri-kanan 22px
+  // Ukuran huruf menyesuaikan lebar kotak supaya tidak pernah terpotong.
+  const fit = (text: string, max: number, charW: number) => Math.max(12, Math.min(max, Math.floor(inner / (Math.max(1, text.length) * charW))));
+  const labelSize = Math.min(...tiles.map((t) => fit(t.label, Math.round(big * 0.5), 0.78)));
+  const valSize = Math.min(...tiles.map((t) => fit(t.value, valueSize(t.value, big), 0.6)));
+  const subSize = Math.min(...tiles.map((t) => fit(clip(t.sub, 20), Math.round(big * 0.46), 0.56)));
+  return (
+    <div style={{ display: "flex", gap, width, height }}>
+      {tiles.map((t, i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", justifyContent: "center", width: w, height, padding: "0 22px", gap: Math.round(big * 0.12), borderRadius: 28, background: "rgba(255,255,255,0.08)", border: "2px solid rgba(255,255,255,0.10)", overflow: "hidden" }}>
+          <div style={{ display: "flex", fontSize: labelSize, fontWeight: 700, color: t.color, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>{t.label}</div>
+          <div style={{ display: "flex", fontSize: valSize, fontWeight: 800, color: t.muted ? C.cream200 : C.cream50, whiteSpace: "nowrap" }}>{t.value}</div>
+          <div style={{ display: "flex", fontSize: subSize, color: C.cream200, whiteSpace: "nowrap" }}>{clip(t.sub, 20)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const RatingPill = ({ p, size }: { p: PlaceView; size: number }) =>
+  p.rating == null ? null : (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, height: size * 1.9, padding: `0 ${size * 0.65}px`, borderRadius: 999, background: C.cream50, color: C.ink, fontSize: size, fontWeight: 800, whiteSpace: "nowrap" }}>
+      <Star s={size} /> {p.rating.toLocaleString("id-ID")}
+      {p.reviews != null && <span style={{ fontWeight: 500, color: C.ink500, fontSize: size * 0.88 }}>({p.reviews.toLocaleString("id-ID")} ulasan)</span>}
+    </div>
+  );
+
+const StatusPill = ({ p, size }: { p: PlaceView; size: number }) => {
+  const s = openStatus(p);
+  if (!s) return null;
+  return <div style={{ display: "flex", alignItems: "center", height: size * 1.9, padding: `0 ${size * 0.65}px`, borderRadius: 999, background: s.open ? C.mint100 : "#fae1e1", color: s.open ? C.mint : C.slow, fontSize: size * 0.9, fontWeight: 700, whiteSpace: "nowrap" }}>{s.label}</div>;
+};
+
 /* ---------------------------------------------------------------- OG: tempat */
 
-export async function placeOg(p: PlaceView, base = SITE_URL) {
-  const photo = await photoData(p.photos[0] || p.photoUrl, 600, 630);
-  const chips: { icon: React.ReactNode; text: string; bg: string; fg: string }[] = [];
-  if (p.rating != null) chips.push({ icon: <Star s={30} />, text: `${p.rating.toLocaleString("id-ID")}${p.reviews != null ? ` (${p.reviews.toLocaleString("id-ID")})` : ""}`, bg: "rgba(255,255,255,0.1)", fg: C.cream50 });
-  if (p.americano) chips.push({ icon: <Cup s={28} c={C.esp900} />, text: `Americano ${fmtRp(p.americano.price, true)}`, bg: C.caramel, fg: C.esp900 });
-  chips.push(
-    p.avgDown != null
-      ? { icon: <Wifi s={28} c="#fff" />, text: `WiFi ${fmtMbps(p.avgDown, 0)} Mbps`, bg: levelColor(p.avgDown), fg: "#fff" }
-      : { icon: <Wifi s={28} c={C.cream200} />, text: p.wifi.length ? `${p.wifi.length} WiFi` : "WiFi belum dites", bg: "rgba(255,255,255,0.1)", fg: C.cream200 },
-  );
-  if (p.is24h) chips.push({ icon: null, text: "Buka 24 jam", bg: C.mint100, fg: C.mint });
-  const name = clip(p.name, 46);
+export async function placeOg(p: PlaceView, base = SITE_URL, speeds: SpeedResult[] = []) {
+  const photo = await photoData(p.photos[0] || p.photoUrl, 520, 630);
+  const name = fitText(p.name, 560, [60, 54, 48, 42], 2);
+  const tiles = placeTiles(p, speeds);
   const img = new ImageResponse(
     (
-      <div style={{ display: "flex", width: "100%", height: "100%", background: C.esp900, fontFamily: "Jakarta" }}>
-        <div style={{ display: "flex", width: 600, height: 630, position: "relative", background: `linear-gradient(135deg, ${C.esp600}, ${C.esp900})` }}>
+      <div style={{ display: "flex", width: 1200, height: 630, background: C.esp900, fontFamily: "Jakarta", position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: 520, height: 630, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${C.esp600}, ${C.esp900})` }}>
           {photo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photo} width={600} height={630} style={{ objectFit: "cover" }} alt="" />
+            <img src={photo} width={520} height={630} style={{ objectFit: "cover" }} alt="" />
           ) : (
-            <div style={{ display: "flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>{MARK(220)}</div>
+            MARK(200)
           )}
-          <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 630, display: "flex", background: `linear-gradient(90deg, rgba(43,26,18,0), ${C.esp900})` }} />
+          <div style={{ position: "absolute", top: 0, right: 0, width: 140, height: 630, display: "flex", background: `linear-gradient(90deg, rgba(43,26,18,0), ${C.esp900})` }} />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", flex: 1, padding: "48px 56px 44px 28px", justifyContent: "space-between" }}>
-          <Brand size={52} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div style={{ display: "flex", fontFamily: "Fraunces", fontSize: name.length > 28 ? 50 : 62, lineHeight: 1.08, color: C.cream50 }}>{name}</div>
-            {p.area && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 26, color: C.cream200 }}>
-                <Pin s={26} c={C.caramel} /> {clip(p.area, 40)}
-              </div>
-            )}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 8 }}>
-              {chips.map((c, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 999, background: c.bg, color: c.fg, fontSize: 26, fontWeight: 700 }}>
-                  {c.icon}
-                  {c.text}
-                </div>
-              ))}
-            </div>
+        <div style={{ position: "absolute", left: 540, top: 44, display: "flex" }}>
+          <Brand size={46} />
+        </div>
+        <div style={{ position: "absolute", left: 560, top: 132, width: 600, height: 44, display: "flex", gap: 12 }}>
+          <RatingPill p={p} size={22} />
+          <StatusPill p={p} size={22} />
+        </div>
+        <div style={{ position: "absolute", left: 560, top: 198, width: 600, height: 150, display: "flex", alignItems: "center", fontFamily: "Fraunces", fontSize: name.size, lineHeight: 1.06, color: C.cream50, overflow: "hidden" }}>{name.text}</div>
+        {p.area && (
+          <div style={{ position: "absolute", left: 560, top: 360, width: 600, height: 34, display: "flex", alignItems: "center", gap: 10, fontSize: 24, color: C.cream200, whiteSpace: "nowrap", overflow: "hidden" }}>
+            <Pin s={24} c={C.caramel} />
+            <span style={{ paddingLeft: 4 }}>{clip(p.area, 40)}</span>
           </div>
-          <div style={{ display: "flex", fontSize: 22, color: C.caramel, fontWeight: 700 }}>{hostOf(base)}</div>
+        )}
+        <div style={{ position: "absolute", left: 560, top: 414, display: "flex" }}>
+          <Tiles tiles={tiles} width={600} height={128} big={40} gap={12} />
         </div>
+        <div style={{ position: "absolute", left: 560, top: 566, width: 600, display: "flex", fontSize: 22, color: C.caramel, fontWeight: 700, whiteSpace: "nowrap" }}>{hostOf(base)}</div>
       </div>
     ),
     { ...OG_SIZE, fonts: await fonts() },
@@ -231,89 +328,134 @@ function qrDataUrl(text: string) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
+function linkParts(base: string, slug: string, maxPath: number) {
+  const path = `/tempat/${slug}`;
+  return { host: hostOf(base), path: path.length > maxPath ? path.slice(0, maxPath - 1) + "…" : path, url: `${base}${path}` };
+}
+
+/**
+ * Story 1080×1920. Semua info penting ada di zona aman y≈250–1600
+ * (atas ±14% tertutup progress bar/profil IG, bawah ±20% tertutup kolom balas/stiker).
+ * Setiap blok diposisikan absolut dengan tinggi tetap → tidak ada yang saling menimpa.
+ */
 export async function placeStory(p: PlaceView, speeds: SpeedResult[], base = SITE_URL) {
-  const W = STORY_SIZE.width;
-  const PH = 1040;
-  const photo = await photoData(p.photos[0] || p.photoUrl, W, PH);
+  const W = 1080, H = 1920, X = 64, CW = W - X * 2;
+  const photo = await photoData(p.photos[0] || p.photoUrl, W, 1120);
   const st = computeStats(speeds);
-  const status = openStatus(p);
-  const url = `${base}/tempat/${p.slug}`;
-  const shortUrl = `${hostOf(base)}/tempat/${p.slug}`;
-  const r1 = (n: number) => fmtMbps(n, n >= 100 ? 0 : 1);
-  const tiles: { label: string; value: string; sub: string; color: string }[] = [
-    p.americano
-      ? { label: "Americano", value: fmtRp(p.americano.price), sub: p.americano.note || (p.americano.checkedAt ? `dicek ${p.americano.checkedAt}` : "harga menu"), color: C.caramel }
-      : { label: "Harga", value: p.priceText || "—", sub: "kisaran per orang", color: C.caramel },
-    st
-      ? { label: "Download", value: st.down[0] === st.down[1] ? `${r1(st.down[0])} Mbps` : `${r1(st.down[0])}–${r1(st.down[1])}`, sub: st.down[0] === st.down[1] ? `${st.tests} tes` : `Mbps · ${st.tests} tes`, color: levelColor(p.avgDown) }
-      : { label: "WiFi", value: p.wifi.length ? `${p.wifi.length} jaringan` : "Belum dites", sub: "cek speed di Nongki", color: C.mint },
-    st
-      ? { label: "Upload · Ping", value: `${r1(st.up[0] === st.up[1] ? st.up[0] : (st.up[0] + st.up[1]) / 2)} Mbps`, sub: `ping ${fmtMbps(st.ping[0], 0)}${st.ping[0] !== st.ping[1] ? `–${fmtMbps(st.ping[1], 0)}` : ""} ms`, color: C.mint }
-      : { label: "Jam buka", value: p.is24h ? "24 jam" : status?.label || "—", sub: p.is24h ? "setiap hari" : "lihat jadwal lengkap", color: C.mint },
-  ];
-  const name = clip(p.name, 52);
+  const name = fitText(p.name, CW, [104, 92, 80, 70, 62], 2);
+  const link = linkParts(base, p.slug, 30);
   const img = new ImageResponse(
     (
-      <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", background: C.esp900, fontFamily: "Jakarta", position: "relative" }}>
-        <div style={{ display: "flex", width: W, height: PH, position: "relative", background: `linear-gradient(160deg, ${C.esp600}, ${C.esp900})`, alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", width: W, height: H, background: C.esp900, fontFamily: "Jakarta", position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 1120, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(160deg, ${C.esp600}, ${C.esp900})` }}>
           {photo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photo} width={W} height={PH} style={{ objectFit: "cover" }} alt="" />
+            <img src={photo} width={W} height={1120} style={{ objectFit: "cover" }} alt="" />
           ) : (
-            MARK(360)
+            MARK(340)
           )}
-          <div style={{ position: "absolute", left: 0, bottom: 0, width: W, height: 520, display: "flex", background: `linear-gradient(180deg, rgba(43,26,18,0), ${C.esp900})` }} />
-          <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 360, display: "flex", background: "linear-gradient(180deg, rgba(43,26,18,0.6), rgba(43,26,18,0))" }} />
-          <div style={{ position: "absolute", left: 64, top: 230, display: "flex", padding: "14px 26px 14px 16px", borderRadius: 999, background: "rgba(43,26,18,0.72)" }}>
-            <Brand size={60} />
+        </div>
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 360, display: "flex", background: "linear-gradient(180deg, rgba(43,26,18,0.55), rgba(43,26,18,0))" }} />
+        <div style={{ position: "absolute", left: 0, top: 420, width: W, height: 700, display: "flex", background: `linear-gradient(180deg, rgba(43,26,18,0) 0%, rgba(43,26,18,0.78) 45%, ${C.esp900} 100%)` }} />
+
+        {/* y 250–338: brand */}
+        <div style={{ position: "absolute", left: X, top: 250, display: "flex", height: 88, alignItems: "center", padding: "0 26px 0 14px", borderRadius: 999, background: "rgba(43,26,18,0.72)" }}>
+          <Brand size={58} />
+        </div>
+        {/* y 630–698: rating + status */}
+        <div style={{ position: "absolute", left: X, top: 630, width: CW, height: 68, display: "flex", gap: 14, alignItems: "center" }}>
+          <RatingPill p={p} size={32} />
+          <StatusPill p={p} size={32} />
+        </div>
+        {/* y 716–936: nama (maks 2 baris, auto-size) */}
+        <div style={{ position: "absolute", left: X, top: 716, width: CW, height: 220, display: "flex", alignItems: "center", fontFamily: "Fraunces", fontSize: name.size, lineHeight: 1.04, color: C.cream50, overflow: "hidden" }}>{name.text}</div>
+        {/* y 952–1000: area */}
+        <div style={{ position: "absolute", left: X, top: 952, width: CW, height: 48, display: "flex", alignItems: "center", gap: 12, fontSize: 34, color: C.cream200, whiteSpace: "nowrap", overflow: "hidden" }}>
+          {p.area ? (
+            <>
+              <Pin s={34} c={C.caramel} />
+              <span style={{ paddingLeft: 4 }}>{clip(p.area, 44)}</span>
+            </>
+          ) : null}
+        </div>
+        {/* y 1030–1230: statistik (tinggi sama) */}
+        <div style={{ position: "absolute", left: X, top: 1030, display: "flex" }}>
+          <Tiles tiles={placeTiles(p, speeds)} width={CW} height={200} big={52} />
+        </div>
+        {/* y 1250–1290: tes terakhir */}
+        <div style={{ position: "absolute", left: X, top: 1250, width: CW, height: 40, display: "flex", alignItems: "center", gap: 12, fontSize: 26, color: C.cream200, whiteSpace: "nowrap", overflow: "hidden" }}>
+          <Wifi s={28} c={C.mint} />
+          {st ? `Tes terakhir ${st.latest.label}${st.loss != null ? ` · loss ${fmtMbps(st.loss, 1)}%` : ""}` : "WiFi belum dites — jadilah yang pertama cek speed"}
+        </div>
+        {/* y 1316–1586: kartu QR */}
+        <div style={{ position: "absolute", left: X, top: 1316, width: CW, height: 270, display: "flex", alignItems: "center", gap: 30, padding: "0 30px", borderRadius: 36, background: C.cream50 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qrDataUrl(link.url)} width={210} height={210} alt="" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: CW - 60 - 210 - 30 }}>
+            <div style={{ display: "flex", fontSize: 36, fontWeight: 800, color: C.esp900, whiteSpace: "nowrap" }}>Cek WiFi, password & harga</div>
+            <div style={{ display: "flex", fontSize: 26, color: C.ink500, whiteSpace: "nowrap" }}>Scan QR atau buka</div>
+            <div style={{ display: "flex", fontSize: link.host.length > 24 ? 28 : 32, fontWeight: 800, color: C.esp600, whiteSpace: "nowrap" }}>{link.host}</div>
+            <div style={{ display: "flex", fontSize: 24, color: C.ink500, whiteSpace: "nowrap" }}>{link.path}</div>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", padding: "0 64px", marginTop: -260, gap: 22 }}>
-          <div style={{ display: "flex", gap: 14 }}>
-            {p.rating != null && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 22px", borderRadius: 999, background: C.cream50, color: C.ink, fontSize: 34, fontWeight: 800 }}>
-                <Star s={34} /> {p.rating.toLocaleString("id-ID")}
-                {p.reviews != null && <span style={{ fontWeight: 500, color: C.ink500, fontSize: 30 }}>({p.reviews.toLocaleString("id-ID")} ulasan)</span>}
-              </div>
-            )}
-            {status && (
-              <div style={{ display: "flex", alignItems: "center", padding: "12px 22px", borderRadius: 999, background: status.open ? C.mint100 : "#fae1e1", color: status.open ? C.mint : C.slow, fontSize: 30, fontWeight: 700 }}>{status.label}</div>
-            )}
-          </div>
-          <div style={{ display: "flex", fontFamily: "Fraunces", fontSize: name.length > 30 ? 84 : 100, lineHeight: 1.04, color: C.cream50 }}>{name}</div>
-          {p.area && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 36, color: C.cream200 }}>
-              <Pin s={36} c={C.caramel} /> {clip(p.area, 44)}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 18, marginTop: 18 }}>
-            {tiles.map((t, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", flex: 1, gap: 6, padding: "26px 24px", borderRadius: 32, background: "rgba(255,255,255,0.07)", border: "2px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: t.color, textTransform: "uppercase", letterSpacing: 2 }}>{t.label}</div>
-                <div style={{ display: "flex", fontSize: t.value.length > 11 ? 38 : 46, fontWeight: 800, color: C.cream50 }}>{t.value}</div>
-                <div style={{ display: "flex", fontSize: 24, color: C.cream200 }}>{clip(t.sub, 26)}</div>
-              </div>
-            ))}
-          </div>
-          {st && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 26, color: C.cream200 }}>
-              <Wifi s={28} c={C.mint} /> Tes terakhir {st.latest.label}{st.loss != null ? ` · loss ${fmtMbps(st.loss, 1)}%` : ""}
-            </div>
-          )}
-          <div style={{ display: "flex", alignItems: "center", gap: 32, marginTop: 22, padding: 28, borderRadius: 36, background: C.cream50 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl(url)} width={200} height={200} alt="" />
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-              <div style={{ display: "flex", fontSize: 36, fontWeight: 800, color: C.esp900 }}>Cek WiFi, password & harga</div>
-              <div style={{ display: "flex", fontSize: 28, color: C.ink500 }}>Scan atau buka:</div>
-              <div style={{ display: "flex", fontSize: shortUrl.length > 44 ? 24 : 28, fontWeight: 700, color: C.esp600 }}>{shortUrl}</div>
-            </div>
-          </div>
-        </div>
-        <div style={{ position: "absolute", left: 0, bottom: 120, width: W, display: "flex", justifyContent: "center", fontSize: 26, color: C.esp600, fontWeight: 700, letterSpacing: 3 }}>NONGKI · NGOPI SAMBIL CEK WIFI</div>
+        {/* dekorasi di zona bawah (boleh tertutup UI story) */}
+        <div style={{ position: "absolute", left: 0, top: 1700, width: W, height: 40, display: "flex", justifyContent: "center", alignItems: "center", fontSize: 24, color: C.esp600, fontWeight: 700, letterSpacing: 4 }}>NONGKI · NGOPI SAMBIL CEK WIFI</div>
       </div>
     ),
     { ...STORY_SIZE, fonts: await fonts() },
+  );
+  return encode(img, "png");
+}
+
+/* ----------------------------------------------- Square 1080×1080 (WA status/feed/X) */
+
+export async function placeSquare(p: PlaceView, speeds: SpeedResult[], base = SITE_URL) {
+  const W = 1080, X = 56, CW = W - X * 2;
+  const photo = await photoData(p.photos[0] || p.photoUrl, W, 600);
+  const name = fitText(p.name, CW - 20, [76, 68, 60, 52], 2);
+  const link = linkParts(base, p.slug, 40);
+  const img = new ImageResponse(
+    (
+      <div style={{ display: "flex", width: W, height: W, background: C.esp900, fontFamily: "Jakarta", position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 600, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(160deg, ${C.esp600}, ${C.esp900})` }}>
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photo} width={W} height={600} style={{ objectFit: "cover" }} alt="" />
+          ) : (
+            MARK(260)
+          )}
+        </div>
+        <div style={{ position: "absolute", left: 0, top: 260, width: W, height: 340, display: "flex", background: `linear-gradient(180deg, rgba(43,26,18,0), ${C.esp900})` }} />
+        <div style={{ position: "absolute", left: X, top: 44, display: "flex", height: 72, alignItems: "center", padding: "0 22px 0 12px", borderRadius: 999, background: "rgba(43,26,18,0.72)" }}>
+          <Brand size={48} />
+        </div>
+        <div style={{ position: "absolute", right: X, top: 40, display: "flex", padding: 10, borderRadius: 22, background: "#fff" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qrDataUrl(link.url)} width={150} height={150} alt="" />
+        </div>
+        <div style={{ position: "absolute", left: X, top: 452, width: CW, height: 58, display: "flex", gap: 12, alignItems: "center" }}>
+          <RatingPill p={p} size={26} />
+          <StatusPill p={p} size={26} />
+        </div>
+        <div style={{ position: "absolute", left: X, top: 522, width: CW, height: 164, display: "flex", alignItems: "center", fontFamily: "Fraunces", fontSize: name.size, lineHeight: 1.04, color: C.cream50, overflow: "hidden" }}>{name.text}</div>
+        <div style={{ position: "absolute", left: X, top: 694, width: CW, height: 42, display: "flex", alignItems: "center", gap: 10, fontSize: 28, color: C.cream200, whiteSpace: "nowrap", overflow: "hidden" }}>
+          {p.area ? (
+            <>
+              <Pin s={28} c={C.caramel} />
+              <span style={{ paddingLeft: 4 }}>{clip(p.area, 50)}</span>
+            </>
+          ) : null}
+        </div>
+        <div style={{ position: "absolute", left: X, top: 760, display: "flex" }}>
+          <Tiles tiles={placeTiles(p, speeds)} width={CW} height={170} big={46} gap={16} />
+        </div>
+        <div style={{ position: "absolute", left: X, top: 962, width: CW, height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 20, padding: "0 24px", background: "rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", fontSize: 26, fontWeight: 800, color: C.caramel, whiteSpace: "nowrap" }}>{link.host}</div>
+          <div style={{ display: "flex", fontSize: 22, color: C.cream200, whiteSpace: "nowrap" }}>{link.path}</div>
+        </div>
+      </div>
+    ),
+    { width: W, height: W, fonts: await fonts() },
   );
   return encode(img, "png");
 }
