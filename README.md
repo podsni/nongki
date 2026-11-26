@@ -156,6 +156,8 @@ Browser ──► Next.js (Vercel Functions)
 | Nama | Wajib | Keterangan |
 |---|---|---|
 | `ADMIN_PASSWORD` | ✅ | Password login `/admin`. Gunakan string acak panjang. |
+| `MENU_MODEL` | opsional | Model vision untuk "Menu dari foto" (default `google/gemini-3-flash`). |
+| `AI_GATEWAY_API_KEY` | opsional (lokal) | Kunci AI Gateway untuk mencoba baca menu AI di lokal; di Vercel cukup OIDC. |
 | `SESSION_SECRET` | disarankan | Kunci HMAC cookie sesi. Jika kosong memakai `ADMIN_PASSWORD`. Mengganti nilainya = semua sesi admin logout. |
 | `BLOB_READ_WRITE_TOKEN` | produksi | Dibuat otomatis oleh Vercel saat Blob store disambungkan ke project. Tanpa ini → file lokal. |
 
@@ -221,6 +223,21 @@ Baris tanpa SSID diabaikan saat simpan. Maksimal 30 WiFi per tempat.
 
 ### Harga Americano & menu
 Di kartu **Harga menu**: isi harga Americano (angka saja, otomatis berformat Rp), ukuran/catatan (mis. "12 oz, panas"), dan **Terakhir dicek** (tombol _Hari ini_). Tambah menu lain dengan **Tambah harga menu lain**. Kosongkan harga untuk menghapus. Harga Americano tampil di kartu tempat, halaman detail, dan bisa dipakai untuk urutan **Americano termurah** / filter **Americano ≤ Rp20rb** di Jelajah.
+
+### Menu dari foto
+Di halaman edit tempat ada kartu **Menu dari foto** (tombol _Menu dari foto_ di atas).
+1. Ketuk foto galeri Google Maps yang berisi menu/papan harga, dan/atau **Unggah foto menu** (kamera HP boleh; dikecilkan otomatis ke ±1600 px). Maks. 6 foto sekali baca.
+2. **Baca menu** → server mengirim foto ke model vision lewat **Vercel AI Gateway** (`MENU_MODEL`, default `google/gemini-3-flash`) dan meminta output terstruktur: kategori, nama, harga (Rupiah penuh; `25K`/`25rb`/`25.000` → 25000), varian (Hot/Ice, ukuran). Harga yang tidak terbaca jelas tidak ditebak, hanya dicantumkan sebagai "tidak terbaca".
+3. Jika AI tidak tersedia (lokal tanpa kunci, atau kredit AI Gateway habis), otomatis pindah ke **OCR di browser** (tesseract.js, bahasa Indonesia+Inggris) + parser baris "Nama …… 25K". OCR bagus untuk menu cetak yang lurus, lemah untuk papan kapur/tulisan tangan/foto miring.
+4. Periksa tabel: edit nama/kategori/varian/harga, hapus atau tambah baris. Item yang sudah ada ditandai _Sudah ada_ dan tidak dicentang. Bila foto menunjukkan harga Americano berbeda dari yang tersimpan, ada centang terpisah untuk memperbaruinya (tidak pernah ditimpa diam-diam).
+5. Isi **Harga per tanggal** (kosongkan bila tanggal foto tidak diketahui), pilih **Gabungkan** atau **Ganti semua** (ketik `GANTI`), lalu **Simpan**. Hanya menu yang berubah; WiFi, foto dan hasil tes tidak disentuh.
+
+Di halaman publik, menu tampil di bagian **Menu & harga**: per kategori, bisa dicari, difilter kategori & harga, dengan keterangan "dicek admin per …" / "dibaca dari foto menu".
+
+**AI Gateway:** di Vercel, autentikasi memakai OIDC otomatis (tanpa API key). Tim Vercel perlu AI Gateway aktif dan punya kredit (ada kredit gratis bulanan; lihat dashboard → AI Gateway). Untuk mencoba AI di lokal, isi `AI_GATEWAY_API_KEY` di `.env.local`.
+
+**Menerapkan menu hasil baca foto secara massal:** `docs/menu-maps/menus-YYYY-MM-DD.json` berisi menu per slug; jalankan
+`NONGKI_URL=https://nongki.bangundwir.my.id NONGKI_PASSWORD=… node scripts/apply-menus.mjs docs/menu-maps/menus-2026-11-26.json` (mode gabungkan, aman diulang). Tambahkan `--dry` untuk melihat rencana saja.
 
 ### Tes kecepatan dari admin
 1. Datang ke lokasi dan sambungkan HP/laptop ke WiFi tempat itu.
@@ -296,6 +313,9 @@ Satu tes memakai sekitar 50–150 MB kuota (tergantung kecepatan).
 | `POST /api/admin/logout` | admin | Hapus cookie. |
 | `POST /api/admin/import` | admin | `{ url }` → draft data dari Google Maps (termasuk `photos[]`, `extracted[]`, `warnings[]`). |
 | `POST /api/admin/places` | admin | Buat tempat. |
+| `POST /api/admin/places/:id/menu` | admin | `{ items, mode: "merge"\|"replace", update?, confirm? }` → tambah/ganti menu saja. |
+| `POST /api/admin/menu/extract` | admin (20×/10 mnt) | `{ urls?: string[], images?: dataURL[] }` (maks. 6) → item menu dari foto via AI Gateway; `503 { code: "no-ai" }` bila AI tidak tersedia. |
+| `GET /api/admin/menu/photo?u=` | admin | Proxy foto galeri Google untuk OCR di browser. |
 | `PUT /api/admin/places/:id` | admin | Ubah tempat (termasuk `wifi[]`, `photos[]`). |
 | `DELETE /api/admin/places/:id` | admin | Hapus tempat + riwayat tesnya. |
 | `GET /api/admin/places/:id` | admin | Data lengkap satu tempat + semua hasil tes. |
@@ -343,6 +363,7 @@ components/
   admin/                   LoginForm, ImportFlow, PlaceForm (WiFi & foto editor), BackupPanel
 lib/
   db.ts                    Baca/tulis JSON (Blob / file lokal) + migrasi ringan
+  menuai.ts, menuparse.ts  Baca menu dari foto (AI Gateway) & parser harga/OCR
   backup.ts                Ekspor/impor, validasi, pratinjau, snapshot & rotasi, CSV
   places.ts                CRUD tempat & hasil tes, validasi input
   maps.ts                  Import Google Maps (data + galeri foto)

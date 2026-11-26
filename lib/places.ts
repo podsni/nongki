@@ -23,6 +23,8 @@ const numOrNull = (v: unknown, min: number, max: number) => {
   return isFinite(n) && n >= min && n <= max ? n : null;
 };
 
+export const MAX_MENU = 200;
+
 export function normalizeInput(body: Record<string, unknown>): Omit<Place, "id" | "slug" | "createdAt" | "updatedAt"> {
   const catKeys = CATEGORIES.map((c) => c.key as string);
   const facKeys = FACILITIES.map((f) => f.key as string);
@@ -35,9 +37,17 @@ export function normalizeInput(body: Record<string, unknown>): Omit<Place, "id" 
   const menuIn = Array.isArray(body.menu) ? body.menu : [];
   const menu: MenuPrice[] = menuIn
     .map((m) => m as Record<string, unknown>)
-    .map((m) => ({ id: str(m.id, 40) || uid("m"), item: str(m.item, 60), price: numOrNull(typeof m.price === "string" ? m.price.replace(/[^\d]/g, "") : m.price, 0, 10_000_000), note: str(m.note, 80), checkedAt: /^\d{4}-\d{2}-\d{2}$/.test(str(m.checkedAt)) ? str(m.checkedAt) : "" }))
+    .map((m) => ({
+      id: str(m.id, 40) || uid("m"),
+      item: str(m.item, 60),
+      price: numOrNull(typeof m.price === "string" ? m.price.replace(/[^\d]/g, "") : m.price, 0, 10_000_000),
+      note: str(m.note, 80),
+      checkedAt: /^\d{4}-\d{2}-\d{2}$/.test(str(m.checkedAt)) ? str(m.checkedAt) : "",
+      ...(str(m.category) ? { category: str(m.category, 40) } : {}),
+      ...(m.source === "foto" ? { source: "foto" as MenuPrice["source"] } : {}),
+    }))
     .filter((m): m is MenuPrice => !!m.item && m.price != null)
-    .slice(0, 40);
+    .slice(0, MAX_MENU);
   const hoursIn = Array.isArray(body.hours) ? body.hours : [];
   const hours = hoursIn
     .map((h) => h as Record<string, unknown>)
@@ -165,5 +175,46 @@ export function addSpeedsFromBody(body: Record<string, unknown>, by: SpeedResult
 export async function deleteSpeed(id: string) {
   await mutateDB((db) => {
     db.speeds = db.speeds.filter((s) => s.id !== id);
+  });
+}
+
+const menuKey = (m: { item: string; note?: string }) => `${m.item}|${m.note ?? ""}`.toLowerCase().replace(/[^a-z0-9|]+/g, "");
+
+/**
+ * Tambahkan banyak item menu ke satu tempat (dipakai fitur "Menu dari foto").
+ * - merge: item baru ditambahkan; item yang sudah ada (nama + catatan sama) dilewati, atau diperbarui harganya bila `update`.
+ * - replace: seluruh menu diganti dengan `items`.
+ * WiFi, foto, dan hasil tes tidak disentuh.
+ */
+export async function saveMenuItems(id: string, itemsIn: unknown, mode: "merge" | "replace", update = false) {
+  const clean = normalizeInput({ menu: Array.isArray(itemsIn) ? itemsIn : [] }).menu;
+  if (!clean.length) throw new Error("Tidak ada item menu yang valid (nama & harga wajib).");
+  return mutateDB((db) => {
+    const p = db.places.find((x) => x.id === id || x.slug === id);
+    if (!p) throw new Error("Tempat tidak ditemukan");
+    let added = 0, updated = 0, skipped = 0;
+    if (mode === "replace") {
+      added = clean.length;
+      p.menu = clean.slice(0, MAX_MENU);
+    } else {
+      const menu = [...p.menu];
+      const idx = new Map(menu.map((m, i) => [menuKey(m), i]));
+      for (const m of clean) {
+        const k = menuKey(m);
+        const i = idx.get(k);
+        if (i === undefined) {
+          if (menu.length >= MAX_MENU) { skipped++; continue; }
+          idx.set(k, menu.length);
+          menu.push({ ...m, id: uid("m") });
+          added++;
+        } else if (update) {
+          menu[i] = { ...menu[i], price: m.price, checkedAt: m.checkedAt || menu[i].checkedAt, category: m.category ?? menu[i].category };
+          updated++;
+        } else skipped++;
+      }
+      p.menu = menu;
+    }
+    p.updatedAt = new Date().toISOString();
+    return { added, updated, skipped, total: p.menu.length, menu: p.menu };
   });
 }

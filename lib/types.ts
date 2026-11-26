@@ -12,6 +12,8 @@ export type MenuPrice = {
   price: number; // Rupiah
   note: string; // ukuran / varian, mis. "12 oz, panas"
   checkedAt: string;
+  category?: string; // mis. "Kopi", "Non kopi", "Makanan" (opsional)
+  source?: "manual" | "foto"; // "foto" = dibaca dari foto menu
 };
 
 export type HoursRow = { day: string; text: string };

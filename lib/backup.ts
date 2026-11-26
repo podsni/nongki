@@ -11,7 +11,7 @@ import { americanoOf, slugify, uid } from "./util";
  * Berisi password WiFi → hanya dilayani lewat route admin, tidak pernah lewat URL Blob publik. */
 
 export const APP = "nongki";
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3; // v3: menu[].category & menu[].source (file v2 tetap bisa diimpor)
 export const MAX_BYTES = 4 * 1024 * 1024; // < batas body request Vercel (4,5 MB)
 export const KEEP_AUTO = 30;
 export const KEEP_MANUAL = 50;
@@ -134,7 +134,10 @@ type Tally = { new: number; updated: number; unchanged: number; removed: number 
 export type Plan = { mode: Mode; places: Tally; wifi: Tally; speeds: Tally; menu: Tally; before: Counts; after: Counts; samples: { new: string[]; updated: string[]; removed: string[] } };
 
 const t0 = (): Tally => ({ new: 0, updated: 0, unchanged: 0, removed: 0 });
-const strip = (p: Place) => JSON.stringify({ ...p, updatedAt: "" });
+/** JSON dengan urutan key tetap supaya perbandingan tidak terpengaruh urutan field. */
+const stable = (v: unknown): string =>
+  Array.isArray(v) ? `[${v.map(stable).join(",")}]` : v && typeof v === "object" ? `{${Object.keys(v).filter((k) => (v as Record<string, unknown>)[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(",")}}` : JSON.stringify(v);
+const strip = (p: Place) => stable({ ...p, updatedAt: "" });
 
 function matchIndex(current: Place[]) {
   const byId = new Map(current.map((p) => [p.id, p]));
@@ -143,11 +146,11 @@ function matchIndex(current: Place[]) {
 }
 
 function tallyList<T extends { id: string }>(a: T[], b: T[], t: Tally, removeMissing: boolean) {
-  const old = new Map(a.map((x) => [x.id, JSON.stringify(x)]));
+  const old = new Map(a.map((x) => [x.id, stable(x)]));
   for (const x of b) {
     const o = old.get(x.id);
     if (o === undefined) t.new++;
-    else if (o === JSON.stringify(x)) t.unchanged++;
+    else if (o === stable(x)) t.unchanged++;
     else t.updated++;
   }
   if (removeMissing) {

@@ -1,0 +1,397 @@
+{
+ "_about": "Menu yang dibaca dari foto galeri Google Maps tiap tempat (26 Nov 2026). Hanya harga yang terbaca jelas. Tanggal foto tidak diketahui, jadi checkedAt dikosongkan.",
+ "places": {
+  "kopi-tric-by-pak-jenggot": {
+   "photos": [
+    "galeri #7 (papan menu lengkap)",
+    "galeri #8 (papan teh/soda + kartu 'Baru' pistachio)"
+   ],
+   "items": [
+    [
+     "Kopi Single Origin",
+     "Robusta Dampit",
+     6000,
+     ""
+    ],
+    [
+     "Kopi Single Origin",
+     "Robusta Ijen",
+     7000,
+     ""
+    ],
+    [
+     "Kopi Single Origin",
+     "Arabica Bali Kintamani",
+     9000,
+     ""
+    ],
+    [
+     "Kopi Single Origin",
+     "Arabica Aceh Gayo",
+     8000,
+     ""
+    ],
+    [
+     "Kopi Single Origin",
+     "Arabica Java Ijen",
+     8000,
+     ""
+    ],
+    [
+     "Kopi Single Origin",
+     "Arabica Arjuna",
+     9000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Espresso",
+     7000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Vodca Americano",
+     10000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Roem Amerikano",
+     10000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Cafe Latte",
+     12000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Cappucino",
+     12000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Dolce Latte",
+     13000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Vanilla Latte",
+     14000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Hazelnut Latte",
+     14000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Caramel Latte",
+     14000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Havana Latte",
+     14000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Brown Sugar",
+     13000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Caramel Machiato",
+     15000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Butterscotch Latte",
+     15000,
+     ""
+    ],
+    [
+     "Espresso Base",
+     "Oaken Latte",
+     16000,
+     ""
+    ],
+    [
+     "Tambahan",
+     "Extra shot",
+     4000,
+     "tambahan"
+    ],
+    [
+     "Tambahan",
+     "Full Arabica",
+     4000,
+     "tambahan"
+    ],
+    [
+     "Tambahan",
+     "1 scoop ice cream",
+     3000,
+     "tambahan"
+    ],
+    [
+     "Non Coffee",
+     "Orange Juice",
+     10000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Choco Latte",
+     12000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Choco Milkshake",
+     16000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Vanilla Milkshake",
+     16000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Strawberry Milkshake",
+     16000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Matcha Latte",
+     16000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Matcha Vanilla Latte",
+     18000,
+     ""
+    ],
+    [
+     "Non Coffee",
+     "Matcha Honey Latte",
+     18000,
+     ""
+    ],
+    [
+     "Teh",
+     "Teh",
+     5000,
+     ""
+    ],
+    [
+     "Teh",
+     "Teh Susu",
+     6000,
+     ""
+    ],
+    [
+     "Teh",
+     "Lemon Tea",
+     6000,
+     ""
+    ],
+    [
+     "Teh",
+     "Vanilla Tea",
+     7000,
+     ""
+    ],
+    [
+     "Teh",
+     "Lychee Tea",
+     7000,
+     ""
+    ],
+    [
+     "Teh",
+     "Mint Tea",
+     7000,
+     ""
+    ],
+    [
+     "Soda",
+     "Joshua",
+     7000,
+     ""
+    ],
+    [
+     "Soda",
+     "Lemon Mojito",
+     9000,
+     ""
+    ],
+    [
+     "Soda",
+     "Lychee Mojito",
+     10000,
+     ""
+    ],
+    [
+     "Soda",
+     "Matcha Mojito",
+     16000,
+     ""
+    ],
+    [
+     "Soda",
+     "Orange Float",
+     14000,
+     ""
+    ],
+    [
+     "Soda",
+     "Cola Float",
+     14000,
+     ""
+    ],
+    [
+     "Kopi Kacang Premium (Baru)",
+     "Pistachio Latte",
+     15000,
+     "es kopi susu kacang"
+    ],
+    [
+     "Kopi Kacang Premium (Baru)",
+     "Pistachio Matcha",
+     18000,
+     ""
+    ],
+    [
+     "Kopi Kacang Premium (Baru)",
+     "Pistachio Choco",
+     15000,
+     ""
+    ],
+    [
+     "Kopi Kacang Premium (Baru)",
+     "Pistachio Milky",
+     13000,
+     ""
+    ]
+   ],
+   "skipped": "Robusta Arjuna (harga ditutup selotip), Specialty Ethiopia Yirgacheffe/Colombia Finca Rojas (hanya '>10K'), Choco Hazelnut (angka tidak jelas: 13/14K), Mochacinno & Affogato (digit kedua tidak jelas), Vietnam Drip (+3K) & +2K (tidak jelas), seluruh Snack/Makanan Nusantara/Chinese Wok Food (baris harga tidak sejajar dengan nama menu, beberapa terhapus).",
+   "conflicts": [
+    {
+     "item": "Americano",
+     "photoPrice": 9000,
+     "note": "Tidak diterapkan: harga Americano yang dicek admin lebih baru dipertahankan"
+    }
+   ]
+  },
+  "semat-space": {
+   "photos": [
+    "galeri #28 (halaman buku menu kopi)"
+   ],
+   "items": [
+    [
+     "Kopi",
+     "Manuhara",
+     20000,
+     "es kopi susu gula palem; ice cream/whip cream/original"
+    ],
+    [
+     "Kopi",
+     "Cappuccino",
+     18000,
+     ""
+    ],
+    [
+     "Kopi",
+     "V60",
+     18000,
+     "Hot/Ice"
+    ],
+    [
+     "Kopi",
+     "Tubruk Robusta",
+     10000,
+     ""
+    ],
+    [
+     "Kopi",
+     "Kopi Susu Saring",
+     14000,
+     "Hot/Ice"
+    ]
+   ],
+   "skipped": "Hanya satu halaman menu yang terfoto; halaman lain tidak ada di galeri.",
+   "conflicts": [
+    {
+     "item": "Americano",
+     "photoPrice": 15000,
+     "note": "Tidak diterapkan: harga Americano yang dicek admin lebih baru dipertahankan"
+    }
+   ]
+  },
+  "nogo-keling-4-0-suzuran": {
+   "photos": [
+    "galeri #22 (struk belanja 28-05-2026, bukan papan menu)"
+   ],
+   "items": [
+    [
+     "Dari struk",
+     "Nasi Goreng",
+     25000,
+     "struk 28 Mei 2026"
+    ],
+    [
+     "Dari struk",
+     "Tahu Cabai Garam",
+     17000,
+     "struk 28 Mei 2026"
+    ],
+    [
+     "Dari struk",
+     "Mix Platter",
+     23000,
+     "struk 28 Mei 2026"
+    ],
+    [
+     "Dari struk",
+     "Mineral Water",
+     5000,
+     "struk 28 Mei 2026"
+    ]
+   ],
+   "skipped": "Es Kopi Susu Butterscotch, Es Kopi Pekat, dan item teratas tertutup teks/jumlah ganda — harga satuan tidak pasti."
+  },
+  "origin-coffee": {
+   "photos": [
+    "galeri #20 papan kapur: hanya WiFi/IG dan 'menu sold out' (kosong)"
+   ],
+   "items": [],
+   "skipped": "Tidak ada foto menu berharga di galeri."
+  },
+  "timur-terasing-tjap-panorama": {
+   "photos": [],
+   "items": [],
+   "skipped": "32 foto galeri dicek, tidak ada foto menu/papan harga."
+  },
+  "nogo-keling-sudimoro": {
+   "photos": [],
+   "items": [],
+   "skipped": "20 foto galeri dicek, tidak ada foto menu/papan harga."
+  }
+ }
+}

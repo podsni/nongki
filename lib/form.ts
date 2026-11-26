@@ -1,6 +1,6 @@
 import type { HoursRow, MenuPrice, Wifi } from "./types";
 
-export type MenuRow = { id: string; item: string; price: string; note: string; checkedAt: string };
+export type MenuRow = { id: string; item: string; price: string; note: string; checkedAt: string; category?: string; source?: "manual" | "foto" };
 
 export type FormValues = {
   name: string;
@@ -57,7 +57,7 @@ export function toForm(src: Src): FormValues {
   };
 }
 
-const toRow = (m: MenuPrice): MenuRow => ({ id: m.id, item: m.item, price: String(m.price), note: m.note, checkedAt: m.checkedAt });
+const toRow = (m: MenuPrice): MenuRow => ({ id: m.id, item: m.item, price: String(m.price), note: m.note, checkedAt: m.checkedAt, ...(m.category ? { category: m.category } : {}), ...(m.source ? { source: m.source } : {}) });
 
 function splitMenu(menu: MenuPrice[]) {
   const a = menu.find((m) => /americano/i.test(m.item));

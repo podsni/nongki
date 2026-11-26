@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LoginForm } from "@/components/admin/LoginForm";
+import { MenuFromPhoto } from "@/components/admin/MenuFromPhoto";
 import { DeleteButton, DeleteSpeedButton, PlaceForm } from "@/components/admin/PlaceForm";
 import { toForm } from "@/lib/form";
 import { SpeedTest } from "@/components/SpeedTest";
@@ -23,6 +24,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/admin" className="text-sm font-semibold text-ink-500">← Kembali</Link>
         <div className="flex items-center gap-2">
+          <a href="#menu-foto" className="rounded-[10px] border border-line px-3 py-1.5 text-xs font-semibold">Menu dari foto</a>
           <a href="#speedtest" className="rounded-[10px] bg-mint-600 px-3 py-1.5 text-xs font-semibold text-white">Tes kecepatan</a>
           <Link href={`/tempat/${place.slug}`} className="rounded-[10px] border border-line px-3 py-1.5 text-xs font-semibold">Lihat halaman</Link>
           <DeleteButton id={place.id} name={place.name} redirect="/admin" />
@@ -31,6 +33,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       {sp.baru && <p className="rounded-[14px] bg-mint-100 px-4 py-3 text-sm font-semibold text-mint-600">Tempat berhasil ditambahkan. Kamu bisa lanjut mengedit di sini.</p>}
       <h1 className="text-2xl font-extrabold">Edit: {place.name}</h1>
       <PlaceForm initial={toForm(place as unknown as Record<string, unknown>)} placeId={place.id} />
+      <MenuFromPhoto placeId={place.id} photos={place.photos} menu={place.menu} />
       <section id="speedtest" className="scroll-mt-20">
         <SpeedTest admin initialSlug={place.slug} places={[{ id: place.id, slug: place.slug, name: place.name, area: place.area, wifi: place.wifi.map((w) => ({ id: w.id, ssid: w.ssid })) }]} />
       </section>

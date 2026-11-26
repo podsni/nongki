@@ -1,3 +1,4 @@
+import { MenuSection } from "@/components/MenuSection";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -47,7 +48,6 @@ export default async function Detail({ params }: Props) {
   const pageUrl = `${base}/tempat/${p.slug}`;
   const placeStats = computeStats(speeds);
   const wifiStats = Object.fromEntries(p.wifi.map((w) => [w.id, computeStats(speeds.filter((s) => s.wifiId === w.id))]));
-  const otherMenu = p.menu.filter((m) => m.id !== p.americano?.id);
   const today = new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(new Date());
 
   const info = (
@@ -85,19 +85,11 @@ export default async function Detail({ params }: Props) {
           <span className="text-ink-500">Belum ada data</span>
         )}
       </Row>
-      {otherMenu.length > 0 && (
-        <Row icon="list" label="Harga menu lain">
-          <ul className="space-y-0.5">
-            {otherMenu.map((m) => (
-              <li key={m.id} className="flex justify-between gap-4">
-                <span>
-                  {m.item}
-                  {m.note && <span className="text-ink-500"> · {m.note}</span>}
-                </span>
-                <span className="shrink-0 font-semibold">{fmtRp(m.price)}</span>
-              </li>
-            ))}
-          </ul>
+      {p.menu.length > 1 && (
+        <Row icon="list" label="Menu">
+          <a href="#menu" className="font-semibold text-espresso-600 hover:underline">
+            {p.menu.length} item · {fmtRp(Math.min(...p.menu.map((m) => m.price)))} – {fmtRp(Math.max(...p.menu.map((m) => m.price)))} · Lihat menu
+          </a>
         </Row>
       )}
       {p.phone && (
@@ -149,6 +141,7 @@ export default async function Detail({ params }: Props) {
               <ShareSheet url={pageUrl} title={p.name} text={placeShareText(p, pageUrl)} storyUrl={`/tempat/${p.slug}/story.png?${imgQuery(imageVersion(p), base)}`} slug={p.slug} className="flex h-12 items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-espresso-600 bg-white font-semibold text-espresso-600" />
             </div>
             {info}
+            {p.menu.length > 0 && <MenuSection menu={p.menu} />}
             {facs.length > 0 && (
               <section className="space-y-3">
                 <h2 className="text-base font-bold">Fasilitas</h2>
